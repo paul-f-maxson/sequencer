@@ -1,16 +1,14 @@
 import { Machine, Actor } from "xstate";
 import { v5 as uuid } from "uuid";
 
-interface SequencerGlobalConfigStates {
-  stepMode: {
-    states: {
-      forward: {};
-      reverse: {};
-      random: {};
-      brownian: {};
-    };
-  };
+interface SequencerConfig {
+  stepMode: "forward" | "reverse" | "random" | "brownian";
 }
+
+type SequencerConfigEvent = {
+  type: "CHANGE_STEPMODE";
+  data: SequencerConfig["stepMode"];
+};
 
 interface SequencerStateSchema {
   states: {
@@ -22,14 +20,30 @@ interface SequencerStateSchema {
 
 type SequencerEvent =
   | { type: "MODIFY_STEP" }
-  | { type: "MODIFY_GLOBAL" }
   | { type: "STEP" }
   | { type: "RUN" }
   | { type: "STOP" }
-  | { type: "PAUSE" };
+  | { type: "PAUSE" }
+  | SequencerConfigEvent;
 
 interface SequencerContext {
   steps: Map<string, Actor>;
   clock: Actor;
-  globalConfig: Actor;
+  config: SequencerConfig;
 }
+
+const sequencerMachine = Machine<
+  SequencerContext,
+  SequencerStateSchema,
+  SequencerEvent
+>({
+  id: "sequencer",
+  initial: "stop",
+  states: {
+    run: {},
+    pause: {},
+    stop: {},
+  },
+});
+
+export default sequencerMachine;
