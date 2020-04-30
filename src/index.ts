@@ -1,6 +1,16 @@
-import { Machine } from "xstate";
+import { Machine, Actor } from "xstate";
 import { v5 as uuid } from "uuid";
-console.log(uuid.URL);
+
+interface SequencerGlobalConfigStates {
+  stepMode: {
+    states: {
+      forward: {};
+      reverse: {};
+      random: {};
+      brownian: {};
+    };
+  };
+}
 
 interface SequencerStateSchema {
   states: {
@@ -12,11 +22,14 @@ interface SequencerStateSchema {
 
 type SequencerEvent =
   | { type: "MODIFY_STEP" }
-  | { type: "NEXT_STEP" }
+  | { type: "MODIFY_GLOBAL" }
+  | { type: "STEP" }
   | { type: "RUN" }
   | { type: "STOP" }
   | { type: "PAUSE" };
 
 interface SequencerContext {
-  steps: Map<>;
+  steps: Map<string, Actor>;
+  clock: Actor;
+  globalConfig: Actor;
 }
