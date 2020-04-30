@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@types/uuid": "^7.0.3",
+    "uuid": "^8.0.0",
+    "xstate": "^4.9.1"
+  }
+}
