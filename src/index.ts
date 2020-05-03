@@ -1,4 +1,4 @@
-import { Machine, Actor } from "xstate";
+import { Machine, Actor, spawn } from "xstate";
 import { v5 as uuid } from "uuid";
 
 type SequencerStep = {
@@ -41,18 +41,13 @@ type TimeSignature = {
     | "thirtysecond"; // What note gets the beat
 };
 
-type SequencerRhythm = {
-  timeSignature: TimeSignature;
-  swingAmount: number; // between 0 and 1
-  // Values should be floored and ceilinged to fit.
-};
-
 type StepMode = "forward" | "reverse" | "random" | "brownian";
 
 type SequencerConfig = {
   stepMode: StepMode;
   timeSignature: TimeSignature;
-  rhythm: SequencerRhythm;
+  swingAmount: number; // between 0 and 1
+  // Values should be floored and ceilinged to fit.
 };
 
 type SequencerConfigEvent =
@@ -62,13 +57,13 @@ type SequencerConfigEvent =
     }
   | { type: "CHANGE_TIMESIGNATURE_TOP"; data: TimeSignature["top"] }
   | { type: "CHANGE_TIMESIGNATURE_BOTTOM"; data: TimeSignature["bottom"] }
-  | { type: "CHANGE_SWING"; data: SequencerRhythm["swingAmount"] };
+  | { type: "CHANGE_SWING"; data: SequencerConfig["swingAmount"] };
 
 interface SequencerStateSchema {
   states: {
-    run: {};
-    pause: {};
-    stop: {};
+    running: {};
+    paused: {};
+    stopped: {};
   };
 }
 
@@ -81,22 +76,66 @@ type SequencerEvent =
   | SequencerConfigEvent;
 
 interface SequencerContext {
-  steps: Map<string, SequencerStep>;
-  clock: Actor;
+  steps: Array<SequencerStep>;
+  currentStep: number; // integer representing the current step of the sequence
+  clock?: Actor; // An actor that sends STEP events to the machine at regular intervals
   config: SequencerConfig;
 }
+
+const defaultSequencerConfig: SequencerConfig = {
+  stepMode: "forward",
+  timeSignature: { top: 4, bottom: "quarter" },
+  swingAmount: 0.5,
+};
+
+const defaultContext: SequencerContext = {
+  steps: Array(16).fill({
+    noteValue: 64,
+    glide: false,
+    subdivide: 1,
+    start: 0,
+    end: 1,
+  }),
+  currentStep: 0,
+  config: defaultSequencerConfig,
+};
 
 const sequencerMachine = Machine<
   SequencerContext,
   SequencerStateSchema,
   SequencerEvent
 >({
+  entry: "spawnClock", // TODO: Define
   id: "sequencer",
-  initial: "stop",
+  context: defaultContext,
+  initial: "stopped",
   states: {
-    run: {},
-    pause: {},
-    stop: {},
+    running: {
+      id: "running",
+      on: {
+        PAUSE: "paused",
+        STOP: "stopped",
+      },
+    },
+    paused: {
+      id: "paused",
+      on: {
+        RUN: "running",
+        STOP: "stopped",
+        STEP: [
+          "playCurrentStep", // TODO: Define
+          "advanceToNextStep", // TODO: Define
+        ],
+      },
+    },
+    stopped: {
+      entry: "resetCurrentStep", // TODO: Define
+      id: "stopped",
+      on: {
+        RUN: "running",
+        PAUSE: "paused",
+      },
+    },
   },
 });
 
