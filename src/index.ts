@@ -1,6 +1,6 @@
 import {
   Machine,
-  Actor,
+  Interpreter,
   spawn,
   MachineConfig,
   MachineOptions,
@@ -61,7 +61,7 @@ type SequencerConfig = {
 interface SequencerContext {
   steps: Array<SequencerStep>;
   currentStep: number; // integer representing the current step of the sequence
-  clock?: Actor<ClockContext, ClockEvent>; // An actor that sends STEP events to the machine at regular intervals
+  clock?: Interpreter<ClockContext, any, ClockEvent, any>; // An actor that sends STEP events to the machine at regular intervals
   config: SequencerConfig;
 }
 
@@ -160,19 +160,15 @@ const clockMachineConfig: MachineConfig<
 
 const clockMachine = Machine(clockMachineConfig);
 
-const sequencerMachineOptions: MachineOptions<
+const sequencerMachineOptions: Partial<MachineOptions<
   SequencerContext,
   SequencerConfigEvent
-> = {
+>> = {
   actions: {
     spawnClock: assign<SequencerContext, SequencerEvent>({
       clock: spawn(clockMachine),
     }),
   },
-  guards: {},
-  activities: {},
-  services: {},
-  delays: {},
 };
 
 const sequencerMachineConfig: MachineConfig<
