@@ -1,5 +1,15 @@
-import { Machine, Actor, spawn } from "xstate";
+import {
+  Machine,
+  Actor,
+  spawn,
+  MachineConfig,
+  MachineOptions,
+  assign,
+} from "xstate";
 import { v5 as uuid } from "uuid";
+import { Clock } from "xstate/lib/interpreter";
+
+// CONTEXT DEFINITIONS
 
 type SequencerStep = {
   // prettier-ignore
@@ -20,8 +30,8 @@ type SequencerStep = {
   // prettier-ignore
   subdivide: 
   // 1 to 32 - number of beats to subdivide this step into
-    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 
-    | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32;
+  1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 
+  | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32;
 
   start: number; // 0 to 1 - fraction of the full length of the beat at which to start play.
   // Values should be floored and ceilinged to fit.
@@ -46,46 +56,18 @@ type StepMode = "forward" | "reverse" | "random" | "brownian";
 type SequencerConfig = {
   stepMode: StepMode;
   timeSignature: TimeSignature;
-  swingAmount: number; // between 0 and 1
-  // Values should be floored and ceilinged to fit.
 };
-
-type SequencerConfigEvent =
-  | {
-      type: "CHANGE_STEPMODE";
-      data: StepMode;
-    }
-  | { type: "CHANGE_TIMESIGNATURE_TOP"; data: TimeSignature["top"] }
-  | { type: "CHANGE_TIMESIGNATURE_BOTTOM"; data: TimeSignature["bottom"] }
-  | { type: "CHANGE_SWING"; data: SequencerConfig["swingAmount"] };
-
-interface SequencerStateSchema {
-  states: {
-    running: {};
-    paused: {};
-    stopped: {};
-  };
-}
-
-type SequencerEvent =
-  | { type: "MODIFY_STEP" }
-  | { type: "STEP" }
-  | { type: "RUN" }
-  | { type: "STOP" }
-  | { type: "PAUSE" }
-  | SequencerConfigEvent;
 
 interface SequencerContext {
   steps: Array<SequencerStep>;
   currentStep: number; // integer representing the current step of the sequence
-  clock?: Actor; // An actor that sends STEP events to the machine at regular intervals
+  clock?: Actor<ClockContext, ClockEvent>; // An actor that sends STEP events to the machine at regular intervals
   config: SequencerConfig;
 }
 
 const defaultSequencerConfig: SequencerConfig = {
   stepMode: "forward",
   timeSignature: { top: 4, bottom: "quarter" },
-  swingAmount: 0.5,
 };
 
 const defaultContext: SequencerContext = {
@@ -100,14 +82,106 @@ const defaultContext: SequencerContext = {
   config: defaultSequencerConfig,
 };
 
-const sequencerMachine = Machine<
+// CLOCK CONTEXT DEFINTIONS
+
+interface ClockContext {
+  tempoSetting: number; // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
+  // tempoSetting will be ignored when running external clock
+  swingAmount: number; // 0 to 1 - represents the amount that offbeats should be offset
+  // Values should be floored and ceilinged to fit.
+}
+
+const defaultClockContext: ClockContext = {
+  tempoSetting: 120,
+  swingAmount: 0.5,
+};
+
+// STATE SCHEMA DEFINITIONS
+
+interface SequencerStateSchema {
+  states: {
+    running: {};
+    paused: {};
+    stopped: {};
+  };
+}
+
+// CLOCK STATE SCHEMA
+
+interface ClockStateSchema {
+  states: {
+    internal: {};
+    external: {};
+  };
+}
+
+// EVENT DEFINITIONS
+
+type ClockEvent =
+  | { type: "GOTO_EXT_CLK" }
+  | { type: "GOTO_INT_CLK" }
+  | { type: "CHANGE_TEMPO"; data: ClockContext["tempoSetting"] }
+  | { type: "CHANGE_SWING"; data: ClockContext["swingAmount"] };
+
+type SequencerConfigEvent =
+  | {
+      type: "CHANGE_STEPMODE";
+      data: StepMode;
+    }
+  | { type: "CHANGE_TIMESIGNATURE_TOP"; data: TimeSignature["top"] }
+  | { type: "CHANGE_TIMESIGNATURE_BOTTOM"; data: TimeSignature["bottom"] };
+
+type SequencerEvent =
+  | { type: "MODIFY_STEP" }
+  | { type: "STEP" }
+  | { type: "RUN" }
+  | { type: "STOP" }
+  | { type: "PAUSE" }
+  | SequencerConfigEvent
+  | ClockEvent;
+
+// MACHINE CONFIG DEFINITIONS
+
+const clockMachineConfig: MachineConfig<
+  ClockContext,
+  ClockStateSchema,
+  ClockEvent
+> = {
+  id: "clock",
+  initial: "internal",
+  states: {
+    internal: {
+      entry: "startInternalClock", // TODO: define
+      exit: "stopInternalClock", // TODO: define
+    },
+    external: {},
+  },
+};
+
+const clockMachine = Machine(clockMachineConfig);
+
+const sequencerMachineOptions: MachineOptions<
+  SequencerContext,
+  SequencerConfigEvent
+> = {
+  actions: {
+    spawnClock: assign<SequencerContext, SequencerEvent>({
+      clock: spawn(clockMachine),
+    }),
+  },
+  guards: {},
+  activities: {},
+  services: {},
+  delays: {},
+};
+
+const sequencerMachineConfig: MachineConfig<
   SequencerContext,
   SequencerStateSchema,
   SequencerEvent
->({
+> = {
   entry: "spawnClock", // TODO: Define
   id: "sequencer",
-  context: defaultContext,
   initial: "stopped",
   states: {
     running: {
@@ -137,6 +211,10 @@ const sequencerMachine = Machine<
       },
     },
   },
-});
+};
 
+const sequencerMachine = Machine(
+  sequencerMachineConfig,
+  sequencerMachineOptions
+);
 export default sequencerMachine;
