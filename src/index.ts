@@ -6,7 +6,6 @@ import {
   MachineOptions,
   assign,
 } from "xstate";
-import { v5 as uuid } from "uuid";
 
 // CONTEXT DEFINITIONS
 
