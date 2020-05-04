@@ -6,6 +6,7 @@ import {
   MachineOptions,
   assign,
 } from "xstate";
+import clockMachine, { ClockContext, ClockEvent } from "../clockMachine";
 
 // CONTEXT DEFINITIONS
 
@@ -80,21 +81,7 @@ const defaultSequencerContext: SequencerContext = {
   config: defaultSequencerConfig,
 };
 
-// CLOCK CONTEXT DEFINTIONS
-
-interface ClockContext {
-  tempoSetting: number; // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
-  // tempoSetting will be ignored when running external clock
-  swingAmount: number; // 0 to 1 - represents the amount that offbeats should be offset
-  // Values should be floored and ceilinged to fit.
-}
-
-const defaultClockContext: ClockContext = {
-  tempoSetting: 120,
-  swingAmount: 0.5,
-};
-
-// STATE SCHEMA DEFINITIONS
+// STATE SCHEMA DEFINITION
 
 interface SequencerStateSchema {
   states: {
@@ -104,22 +91,7 @@ interface SequencerStateSchema {
   };
 }
 
-// CLOCK STATE SCHEMA
-
-interface ClockStateSchema {
-  states: {
-    internal: {};
-    external: {};
-  };
-}
-
 // EVENT DEFINITIONS
-
-type ClockEvent =
-  | { type: "GOTO_EXT_CLK" }
-  | { type: "GOTO_INT_CLK" }
-  | { type: "CHANGE_TEMPO"; data: ClockContext["tempoSetting"] }
-  | { type: "CHANGE_SWING"; data: ClockContext["swingAmount"] };
 
 type SequencerConfigEvent =
   | {
@@ -140,32 +112,13 @@ type SequencerEvent =
 
 // MACHINE CONFIG DEFINITIONS
 
-const clockMachineConfig: MachineConfig<
-  ClockContext,
-  ClockStateSchema,
-  ClockEvent
-> = {
-  id: "clock",
-  initial: "internal",
-  states: {
-    internal: {
-      entry: "startInternalClock", // TODO: define
-      exit: "stopInternalClock", // TODO: define
-    },
-
-    external: {},
-  },
-};
-
-const clockMachine = Machine(clockMachineConfig, {}, defaultClockContext);
-
 const sequencerMachineOptions: Partial<MachineOptions<
   SequencerContext,
   SequencerConfigEvent
 >> = {
   actions: {
     spawnClock: assign<SequencerContext, SequencerEvent>({
-      clock: spawn(clockMachine, "clock"),
+      clock: spawn(clockMachine, { name: "clock", autoForward: true }),
     }),
   },
 };
@@ -175,7 +128,7 @@ const sequencerMachineConfig: MachineConfig<
   SequencerStateSchema,
   SequencerEvent
 > = {
-  entry: "spawnClock", // TODO: Define
+  entry: "spawnClock",
   id: "sequencer",
   initial: "stopped",
   states: {
