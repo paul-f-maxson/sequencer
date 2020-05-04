@@ -7,7 +7,6 @@ import {
   assign,
 } from "xstate";
 import { v5 as uuid } from "uuid";
-import { Clock } from "xstate/lib/interpreter";
 
 // CONTEXT DEFINITIONS
 
@@ -70,7 +69,7 @@ const defaultSequencerConfig: SequencerConfig = {
   timeSignature: { top: 4, bottom: "quarter" },
 };
 
-const defaultContext: SequencerContext = {
+const defaultSequencerContext: SequencerContext = {
   steps: Array(16).fill({
     noteValue: 64,
     glide: false,
@@ -154,11 +153,12 @@ const clockMachineConfig: MachineConfig<
       entry: "startInternalClock", // TODO: define
       exit: "stopInternalClock", // TODO: define
     },
+
     external: {},
   },
 };
 
-const clockMachine = Machine(clockMachineConfig);
+const clockMachine = Machine(clockMachineConfig, {}, defaultClockContext);
 
 const sequencerMachineOptions: Partial<MachineOptions<
   SequencerContext,
@@ -166,7 +166,7 @@ const sequencerMachineOptions: Partial<MachineOptions<
 >> = {
   actions: {
     spawnClock: assign<SequencerContext, SequencerEvent>({
-      clock: spawn(clockMachine),
+      clock: spawn(clockMachine, "clock"),
     }),
   },
 };
@@ -187,6 +187,7 @@ const sequencerMachineConfig: MachineConfig<
         STOP: "stopped",
       },
     },
+
     paused: {
       id: "paused",
       on: {
@@ -198,6 +199,7 @@ const sequencerMachineConfig: MachineConfig<
         ],
       },
     },
+
     stopped: {
       entry: "resetCurrentStep", // TODO: Define
       id: "stopped",
@@ -211,6 +213,8 @@ const sequencerMachineConfig: MachineConfig<
 
 const sequencerMachine = Machine(
   sequencerMachineConfig,
-  sequencerMachineOptions
+  sequencerMachineOptions,
+  defaultSequencerContext
 );
+
 export default sequencerMachine;
