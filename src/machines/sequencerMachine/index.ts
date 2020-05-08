@@ -114,11 +114,11 @@ type SequencerEvent =
 
 const sequencerMachineOptions: Partial<MachineOptions<
   SequencerContext,
-  SequencerConfigEvent
+  SequencerEvent
 >> = {
   actions: {
     spawnClock: assign<SequencerContext, SequencerEvent>({
-      clock: spawn(clockMachine, { name: "clock", autoForward: true }),
+      clock: () => spawn(clockMachine, { name: "clock", autoForward: true }),
     }),
   },
 };
@@ -137,6 +137,9 @@ const sequencerMachineConfig: MachineConfig<
       on: {
         PAUSE: "paused",
         STOP: "stopped",
+        STEP: [
+          "advanceToNextStep", // TODO: Define
+        ],
       },
     },
 
@@ -146,7 +149,6 @@ const sequencerMachineConfig: MachineConfig<
         RUN: "running",
         STOP: "stopped",
         STEP: [
-          "playCurrentStep", // TODO: Define
           "advanceToNextStep", // TODO: Define
         ],
       },

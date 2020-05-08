@@ -4,6 +4,7 @@ import {
   InvokeCreator,
   sendParent,
   ActionFunction,
+  forwardTo,
 } from "xstate";
 
 // CLOCK CONTEXT DEFINITION
@@ -33,14 +34,12 @@ interface ClockStateSchema {
 export type ClockEvent =
   | { type: "CHNG_SRC_EXT"; data: undefined }
   | { type: "CHNG_SRC_INT"; data: undefined }
-  | { type: "CHANGE_TEMPO"; data: ClockContext["tempoSetting"] }
-  | { type: "CHANGE_SWING"; data: ClockContext["swingAmount"] }
+  | { type: "CHNG_TEMPO"; data: ClockContext["tempoSetting"] }
+  | { type: "CHNG_SWING"; data: ClockContext["swingAmount"] }
   | { type: "PULSE"; data: undefined };
 
 // ACTIONS
-const actions: Record<string, ActionFunction<ClockContext, ClockEvent>> = {
-  forwardToParent: (_, e) => sendParent(e),
-};
+const actions: Record<string, ActionFunction<ClockContext, ClockEvent>> = {};
 
 // TODO: implement swing
 // TODO: implement correction for interval drift
@@ -48,17 +47,21 @@ const makeInternalClock: InvokeCreator<ClockContext, ClockEvent> = (ctx) => (
   callback,
   onReceive
 ) => {
-  let id: number;
+  let id: ReturnType<typeof setInterval>;
   let cleanup: Function;
 
-  // Sets an interval that sends the 'STEP' event to the parent every 64th note
+  // Sets an interval that sends the 'PULSE' event to the parent every 64th note
   const setClock = (bpm: number) => {
-    const msPerBeat: number = (60 * 1000) / bpm / 64; // conversion from bpm to milliseconds interval
+    const correctionAmount = 1.419;
+    // const correctionFactor = 0.8103; // amount to correct for timing errors by
+    const msPerBeat: number = (60 * 1000) / bpm / 64 - correctionAmount; // conversion from bpm to milliseconds interval
     // e.g. 120 bt per min => 7.8125 ms per 64th note
 
     clearInterval(id);
 
-    id = setInterval(() => callback("PULSE"), msPerBeat);
+    id = setInterval(() => {
+      callback("PULSE");
+    }, msPerBeat);
 
     cleanup = () => clearInterval(id);
   };
@@ -86,11 +89,14 @@ const clockMachineConfig: MachineConfig<
 > = {
   id: "clock",
   initial: "internal",
-  on: { PULSE: "forwardToParent" },
+  on: { PULSE: { actions: sendParent("PULSE") } },
   states: {
     internal: {
       invoke: { id: "internalClock", src: "makeInternalClock" },
-      on: { CHNG_SRC_EXT: "external" },
+      on: {
+        CHNG_SRC_EXT: "external",
+        CHNG_TEMPO: { actions: forwardTo("internalClock") },
+      },
     },
 
     external: {
