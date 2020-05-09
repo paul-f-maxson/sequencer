@@ -88,6 +88,7 @@ afterAll((done) => {
 it(`Sends a PULSE event every 7.813+/-0.15ms (1.92%) by default`, (done) => {
   expect.assertions(2);
 
+  lastPulseTime = undefined;
   pulsesRecorded = 0;
   pulseTimeAccumulator = BigInt(0);
 
@@ -119,6 +120,7 @@ it(`responds to CHNG_TEMPO events`, (done) => {
     }
   });
 
+  lastPulseTime = undefined;
   pulsesRecorded = 0;
   pulseTimeAccumulator = BigInt(0);
 
