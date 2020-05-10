@@ -85,9 +85,13 @@ const defaultSequencerContext: SequencerContext = {
 
 interface SequencerStateSchema {
   states: {
-    running: {};
-    paused: {};
-    stopped: {};
+    active: {
+      states: {
+        running: {};
+        paused: {};
+      };
+    };
+    inactive: {};
   };
 }
 
@@ -112,7 +116,7 @@ type SequencerEvent =
 
 // MACHINE CONFIG DEFINITIONS
 
-const sequencerMachineOptions: Partial<MachineOptions<
+export const sequencerMachineDefaultOptions: Partial<MachineOptions<
   SequencerContext,
   SequencerEvent
 >> = {
@@ -130,12 +134,25 @@ const sequencerMachineConfig: MachineConfig<
 > = {
   entry: "spawnClock",
   id: "sequencer",
-  initial: "stopped",
+  initial: "inactive",
   states: {
-    running: {
-      id: "running",
+    active: {
+      id: "active",
+      states: {
+        running: {
+          id: "running",
+          on: {
+            PAUSE: "paused",
+          },
+        },
+        paused: {
+          id: "paused",
+          on: {
+            RUN: "running",
+          },
+        },
+      },
       on: {
-        PAUSE: "paused",
         STOP: "stopped",
         STEP: [
           "advanceToNextStep", // TODO: Define
@@ -143,23 +160,12 @@ const sequencerMachineConfig: MachineConfig<
       },
     },
 
-    paused: {
-      id: "paused",
-      on: {
-        RUN: "running",
-        STOP: "stopped",
-        STEP: [
-          "advanceToNextStep", // TODO: Define
-        ],
-      },
-    },
-
-    stopped: {
+    inactive: {
       entry: "resetCurrentStep", // TODO: Define
-      id: "stopped",
+      id: "inactive",
       on: {
-        RUN: "running",
-        PAUSE: "paused",
+        RUN: "active.running",
+        PAUSE: "active.paused",
       },
     },
   },
@@ -167,7 +173,7 @@ const sequencerMachineConfig: MachineConfig<
 
 const sequencerMachine = Machine(
   sequencerMachineConfig,
-  sequencerMachineOptions,
+  sequencerMachineDefaultOptions,
   defaultSequencerContext
 );
 
