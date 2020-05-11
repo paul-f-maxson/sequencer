@@ -1,4 +1,4 @@
-import clockMachine, { ClockContext, ClockEvent } from ".";
+import clockMachine, { ClockContext, ClockEvent } from '.';
 import {
   Machine,
   spawn,
@@ -7,7 +7,7 @@ import {
   Interpreter,
   interpret,
   send,
-} from "xstate";
+} from 'xstate';
 
 // TEST SETUP
 
@@ -26,8 +26,11 @@ const mockParentMachineOptions: Partial<MachineOptions<
   MockParentMachineEvent
 >> = {
   actions: {
-    spawnClock: assign<MockParentMachineContext, MockParentMachineEvent>({
-      clock: () => spawn(clockMachine, "clock"),
+    spawnClock: assign<
+      MockParentMachineContext,
+      MockParentMachineEvent
+    >({
+      clock: () => spawn(clockMachine, 'clock'),
     }),
   },
 };
@@ -38,12 +41,12 @@ const mockParentMachine = Machine<
   MockParentMachineEvent
 >(
   {
-    id: "mockParent",
+    id: 'mockParent',
     context: {
       clock: undefined,
     },
-    entry: "spawnClock",
-    initial: "ready",
+    entry: 'spawnClock',
+    initial: 'ready',
     states: {
       ready: {
         on: {
@@ -51,14 +54,15 @@ const mockParentMachine = Machine<
             actions: () => {
               const currentTime = process.hrtime.bigint();
               if (lastPulseTime !== undefined) {
-                pulseTimeAccumulator += currentTime - lastPulseTime;
+                pulseTimeAccumulator +=
+                  currentTime - lastPulseTime;
               }
               pulsesRecorded++;
               lastPulseTime = currentTime;
             },
           },
           CHNG_TEMPO: {
-            actions: send((_, evt) => evt, { to: "clock" }),
+            actions: send((_, evt) => evt, { to: 'clock' }),
           },
         },
       },
@@ -94,7 +98,8 @@ it(`Sends a PULSE event every 7.813+/-0.15ms (1.92%) by default`, (done) => {
 
   setTimeout(() => {
     const avgPulseDuration =
-      (Number(pulseTimeAccumulator) * 0.000001) / pulsesRecorded;
+      Number(pulseTimeAccumulator / BigInt(pulsesRecorded)) *
+      0.000001;
 
     // Expect the time between pulse events to be within 1.92% of expected
     expect(avgPulseDuration).toBeGreaterThan(7.66);
@@ -107,10 +112,11 @@ it(`responds to CHNG_TEMPO events`, (done) => {
   expect.assertions(2);
 
   service.onEvent((evt) => {
-    if (evt.type === "CHNG_TEMPO") {
+    if (evt.type === 'CHNG_TEMPO') {
       setTimeout(() => {
         const avgPulseDuration =
-          (Number(pulseTimeAccumulator) * 0.000001) / pulsesRecorded;
+          Number(pulseTimeAccumulator / BigInt(pulsesRecorded)) *
+          0.000001;
 
         // Expect the time between pulse events to be within 1.92% of expected
         expect(avgPulseDuration).toBeGreaterThan(10);
@@ -124,5 +130,5 @@ it(`responds to CHNG_TEMPO events`, (done) => {
   pulsesRecorded = 0;
   pulseTimeAccumulator = BigInt(0);
 
-  service.send({ type: "CHNG_TEMPO", data: 90 });
+  service.send({ type: 'CHNG_TEMPO', data: 90 });
 }, 6000);
