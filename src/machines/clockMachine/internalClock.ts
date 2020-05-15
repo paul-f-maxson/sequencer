@@ -30,7 +30,12 @@ export const makeInternalClock: InvokeCreator<ClockContext> = (
   setClock(ctx.tempoSetting);
 
   // If the clock is asked to change tempo, set the clock
-  onReceive((evt: ClockEvent) => setClock(evt.data));
+  onReceive((evt: ClockEvent) => {
+    switch (evt.type) {
+      case 'CHNG_TEMPO':
+        setClock(evt.data);
+    }
+  });
 
   return cleanup;
 };

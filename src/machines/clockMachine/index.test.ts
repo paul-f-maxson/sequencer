@@ -1,4 +1,3 @@
-import clockMachine, { ClockContext, ClockEvent } from '.';
 import {
   Machine,
   spawn,
@@ -6,11 +5,32 @@ import {
   MachineOptions,
   Interpreter,
   interpret,
+  InvokeCreator,
+  InvokeCallback,
 } from 'xstate';
 
 import logger from '../../../logger';
+import clockMachine, {
+  ClockContext,
+  ClockEvent,
+  clockMachineDefaultOptions,
+} from '.';
 
 // TEST SETUP
+
+let chngTempoRecorded = 0;
+
+const makeMockInternalClock: InvokeCreator<ClockContext> = () => (
+  _,
+  onReceive
+) => {
+  onReceive((evt) => {
+    switch (evt.type) {
+      case 'CHNG_TEMPO':
+        chngTempoRecorded++;
+    }
+  });
+};
 
 interface MockParentMachineContext {
   clock: Interpreter<ClockContext, any, ClockEvent, any>;
@@ -22,6 +42,25 @@ interface MockParentMachineStateSchema {
   states: { ready: {} };
 }
 
+const mockClockMachine: typeof clockMachine = clockMachine.withConfig(
+  {
+    ...clockMachineDefaultOptions,
+    actions: {
+      ...clockMachineDefaultOptions.actions,
+      spawnInternalClock: assign<ClockContext, ClockEvent>({
+        internalClock: (ctx, evt) =>
+          spawn(
+            makeMockInternalClock(ctx, evt) as InvokeCallback,
+            {
+              name: 'internalClock',
+              autoForward: true,
+            }
+          ),
+      }),
+    },
+  }
+);
+
 const mockParentMachineOptions: Partial<MachineOptions<
   MockParentMachineContext,
   MockParentMachineEvent
@@ -32,7 +71,7 @@ const mockParentMachineOptions: Partial<MachineOptions<
       MockParentMachineEvent
     >({
       clock: () =>
-        spawn(clockMachine, {
+        spawn(mockClockMachine, {
           name: 'clock',
           autoForward: true,
         }),
@@ -100,3 +139,5 @@ it(`Forwards recieved PULSE events to parent`, (done) => {
 
   service.children.get('clock').send({ type: 'PULSE' });
 }, 6000);
+
+it(`Forwards recieved 'CHNG_TEMPO' events to internal clock`, (done) => {});

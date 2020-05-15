@@ -46,7 +46,7 @@ export type ClockEvent =
 
 // MACHINE OPTIONS
 
-const clockMachineDefaultOptions: Partial<MachineOptions<
+export const clockMachineDefaultOptions: Partial<MachineOptions<
   ClockContext,
   ClockEvent
 >> = {
