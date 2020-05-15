@@ -18,18 +18,13 @@ import clockMachine, {
 
 // TEST SETUP
 
-let chngTempoRecorded = 0;
+const internalClockRecieveSpy = jest.fn();
 
 const makeMockInternalClock: InvokeCreator<ClockContext> = () => (
   _,
   onReceive
 ) => {
-  onReceive((evt) => {
-    switch (evt.type) {
-      case 'CHNG_TEMPO':
-        chngTempoRecorded++;
-    }
-  });
+  onReceive(internalClockRecieveSpy);
 };
 
 interface MockParentMachineContext {
@@ -79,6 +74,8 @@ const mockParentMachineOptions: Partial<MachineOptions<
   },
 };
 
+let pulsesRecorded: number;
+
 const mockParentMachine = Machine<
   MockParentMachineContext,
   MockParentMachineStateSchema,
@@ -108,8 +105,6 @@ const mockParentMachine = Machine<
 
 const service = interpret(mockParentMachine, logger.info);
 
-let pulsesRecorded = 0;
-
 beforeAll((done) => {
   service.start();
   done();
@@ -122,11 +117,11 @@ afterAll((done) => {
 
 // TESTS
 
-it('starts without crashing', (done) => {
+xit('starts without crashing', (done) => {
   done();
 });
 
-it(`Forwards recieved PULSE events to parent`, (done) => {
+xit(`Forwards recieved PULSE events to parent`, (done) => {
   expect.assertions(1);
 
   pulsesRecorded = 0;
@@ -140,4 +135,19 @@ it(`Forwards recieved PULSE events to parent`, (done) => {
   service.children.get('clock').send({ type: 'PULSE' });
 }, 6000);
 
-it(`Forwards recieved 'CHNG_TEMPO' events to internal clock`, (done) => {});
+xit(`Forwards recieved 'CHNG_TEMPO' events to internal clock`, (done) => {
+  expect.assertions(1);
+
+  setTimeout(() => {
+    expect(internalClockRecieveSpy).toHaveBeenLastCalledWith({
+      type: 'CHNG_TEMPO',
+      data: 90,
+    });
+
+    done();
+  }, 1000);
+
+  service.children
+    .get('clock')
+    .send({ type: 'CHNG_TEMPO', data: 90 });
+});

@@ -14,18 +14,18 @@ import { log, send } from 'xstate/lib/actions';
 
 // CLOCK CONTEXT DEFINITION
 
-export interface ClockContext {
-  tempoSetting: number; // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
+export const clockMachineDefaultContext = {
+  tempoSetting: 120, // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
   // tempoSetting will be ignored when running external clock
-  swingAmount: number; // 0 to 1 - represents the amount that offbeats should be offset
+  swingAmount: 0.5, // 0 to 1 - represents the amount that offbeats should be offset
   // Values should be floored and ceilinged to fit.
-  internalClock?: Actor<ClockContext, ClockEvent>;
-}
-
-const defaultClockContext: ClockContext = {
-  tempoSetting: 120,
-  swingAmount: 0.5,
+  internalClock: undefined as Actor<
+    { tempoSetting: number; swingAmount: number },
+    ClockEvent | undefined
+  >,
 };
+
+export type ClockContext = typeof clockMachineDefaultContext;
 
 // STATE SCHEMA DEFINITION
 
@@ -99,7 +99,7 @@ const clockMachineConfig: MachineConfig<
 const clockMachine = Machine(
   clockMachineConfig,
   clockMachineDefaultOptions,
-  defaultClockContext
+  clockMachineDefaultContext
 );
 
 export default clockMachine;

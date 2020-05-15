@@ -1,4 +1,4 @@
-import { ClockContext, ClockEvent } from '.';
+import { ClockEvent, clockMachineDefaultContext } from '.';
 
 import { makeInternalClock } from './internalClock';
 import {
@@ -13,8 +13,6 @@ import {
 import logger from '../../../logger';
 
 type MockParentMachineEvent = ClockEvent;
-
-type MockParentMachineContext = ClockContext;
 
 interface MockParentMachineStateSchema {
   states: {
@@ -37,8 +35,28 @@ const mockParentMachineDefaultOptions: Partial<MachineOptions<
           autoForward: true,
         }),
     }),
+    trackPulse: ({ testCtx: debugCtx }) => {
+      const currentTime = process.hrtime.bigint();
+      if (debugCtx.lastPulseTime !== undefined) {
+        debugCtx.pulseTimeAccumulator +=
+          currentTime - debugCtx.lastPulseTime;
+      }
+      debugCtx.pulsesRecorded++;
+      debugCtx.lastPulseTime = currentTime;
+    },
   },
 };
+
+const mockParentMachineDefaultContext = {
+  ...clockMachineDefaultContext,
+  testCtx: {
+    lastPulseTime: BigInt(0),
+    pulseTimeAccumulator: BigInt(0),
+    pulsesRecorded: 0,
+  },
+};
+
+type MockParentMachineContext = typeof mockParentMachineDefaultContext;
 
 const mockParentMachineConfig: MachineConfig<
   MockParentMachineContext,
@@ -46,30 +64,30 @@ const mockParentMachineConfig: MachineConfig<
   MockParentMachineEvent
 > = {
   id: 'mockParent',
-  context: {
-    internalClock: undefined,
-    tempoSetting: 120,
-    swingAmount: 0.5,
-  },
   initial: 'ready',
   states: {
     ready: {
-      entry: ['spawnInternalClock'],
+      entry: 'spawnInternalClock',
       on: {
         PULSE: {
-          actions: () => {
-            const currentTime = process.hrtime.bigint();
-            if (lastPulseTime !== undefined) {
-              pulseTimeAccumulator +=
-                currentTime - lastPulseTime;
-            }
-            pulsesRecorded++;
-            lastPulseTime = currentTime;
-          },
+          actions: 'trackPulse',
         },
       },
     },
   },
+};
+
+const makeRunningService = () => {
+  const service = interpret(
+    mockParentMachine.withContext(
+      mockParentMachineDefaultContext
+    ),
+    logger.info
+  );
+
+  service.start();
+
+  return service;
 };
 
 const mockParentMachine = Machine(
@@ -77,43 +95,46 @@ const mockParentMachine = Machine(
   mockParentMachineDefaultOptions
 );
 
-const service = interpret(mockParentMachine, logger.info);
+it('starts without crashing', (done) => {
+  const service = makeRunningService();
 
-let lastPulseTime: ReturnType<typeof process.hrtime.bigint>;
-let pulsesRecorded = 0;
-let pulseTimeAccumulator = BigInt(0);
-
-beforeAll((done) => {
-  service.start();
-  done();
-});
-
-afterAll((done) => {
   service.stop();
   done();
 });
 
-it('starts without crashing', (done) => {
-  done();
-});
-
 it('sends PULSE event(s)', (done) => {
-  expect.assertions(1);
+  const service = makeRunningService();
 
-  pulsesRecorded = 0;
+  let pulsesRecorded: number;
+
+  // Track changes to these mock parent machine context values
+  service.onChange(({ testCtx }) => {
+    pulsesRecorded = testCtx.pulsesRecorded;
+  });
+
+  expect.assertions(1);
 
   setTimeout(() => {
     expect(pulsesRecorded).toBeGreaterThan(0);
+
+    service.stop();
     done();
   }, 1000);
 });
 
 it(`Sends a PULSE event every 8+/1ms by default`, (done) => {
-  expect.assertions(2);
+  const service = makeRunningService();
 
-  lastPulseTime = undefined;
-  pulsesRecorded = 0;
-  pulseTimeAccumulator = BigInt(0);
+  let pulsesRecorded: number;
+  let pulseTimeAccumulator: bigint;
+
+  // Track changes to these mock parent machine context values
+  service.onChange(({ testCtx }) => {
+    pulsesRecorded = testCtx.pulsesRecorded;
+    pulseTimeAccumulator = testCtx.pulseTimeAccumulator;
+  });
+
+  expect.assertions(2);
 
   setTimeout(() => {
     const avgPulseDuration =
@@ -123,11 +144,24 @@ it(`Sends a PULSE event every 8+/1ms by default`, (done) => {
     // Expect the time between pulse events to be within 1.92% of expected
     expect(avgPulseDuration).toBeGreaterThan(7);
     expect(avgPulseDuration).toBeLessThan(9);
+
+    service.stop();
     done();
   }, 1000);
 }, 6000);
 
-it(`responds to CHNG_TEMPO events`, (done) => {
+it(`reacts to CHNG_TEMPO events`, (done) => {
+  const service = makeRunningService();
+
+  let pulsesRecorded: number;
+  let pulseTimeAccumulator: bigint;
+
+  // Track changes to these mock parent machine context values
+  service.onChange(({ testCtx }) => {
+    pulsesRecorded = testCtx.pulsesRecorded;
+    pulseTimeAccumulator = testCtx.pulseTimeAccumulator;
+  });
+
   expect.assertions(2);
 
   service.onEvent((evt) => {
@@ -141,14 +175,14 @@ it(`responds to CHNG_TEMPO events`, (done) => {
         expect(avgPulseDuration).toBeGreaterThan(10);
         expect(avgPulseDuration).toBeLessThan(11);
 
+        service.stop();
         done();
       }, 1000);
     }
   });
 
-  lastPulseTime = undefined;
-  pulsesRecorded = 0;
-  pulseTimeAccumulator = BigInt(0);
-
-  service.send({ type: 'CHNG_TEMPO', data: 90 });
+  service.send({
+    type: 'CHNG_TEMPO',
+    data: 90,
+  } as ClockEvent);
 }, 6000);
