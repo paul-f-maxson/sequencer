@@ -5,8 +5,11 @@ import {
   MachineConfig,
   MachineOptions,
   assign,
-} from "xstate";
-import clockMachine, { ClockContext, ClockEvent } from "../clockMachine";
+} from 'xstate';
+import clockMachine, {
+  ClockContext,
+  ClockEvent,
+} from '../clockMachine';
 
 // CONTEXT DEFINITIONS
 
@@ -42,15 +45,15 @@ type SequencerStep = {
 type TimeSignature = {
   top: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12; // Number of beats per measure
   bottom:
-    | "whole"
-    | "half"
-    | "quarter"
-    | "eighth"
-    | "sixteenth"
-    | "thirtysecond"; // What note gets the beat
+    | 'whole'
+    | 'half'
+    | 'quarter'
+    | 'eighth'
+    | 'sixteenth'
+    | 'thirtysecond'; // What note gets the beat
 };
 
-type StepMode = "forward" | "reverse" | "random" | "brownian";
+type StepMode = 'forward' | 'reverse' | 'random' | 'brownian';
 
 type SequencerConfig = {
   stepMode: StepMode;
@@ -65,8 +68,8 @@ interface SequencerContext {
 }
 
 const defaultSequencerConfig: SequencerConfig = {
-  stepMode: "forward",
-  timeSignature: { top: 4, bottom: "quarter" },
+  stepMode: 'forward',
+  timeSignature: { top: 4, bottom: 'quarter' },
 };
 
 const defaultSequencerContext: SequencerContext = {
@@ -99,18 +102,24 @@ interface SequencerStateSchema {
 
 type SequencerConfigEvent =
   | {
-      type: "CHANGE_STEPMODE";
+      type: 'CHANGE_STEPMODE';
       data: StepMode;
     }
-  | { type: "CHANGE_TIMESIGNATURE_TOP"; data: TimeSignature["top"] }
-  | { type: "CHANGE_TIMESIGNATURE_BOTTOM"; data: TimeSignature["bottom"] };
+  | {
+      type: 'CHANGE_TIMESIGNATURE_TOP';
+      data: TimeSignature['top'];
+    }
+  | {
+      type: 'CHANGE_TIMESIGNATURE_BOTTOM';
+      data: TimeSignature['bottom'];
+    };
 
 type SequencerEvent =
-  | { type: "MODIFY_STEP" }
-  | { type: "STEP" }
-  | { type: "RUN" }
-  | { type: "STOP" }
-  | { type: "PAUSE" }
+  | { type: 'MODIFY_STEP' }
+  | { type: 'STEP' }
+  | { type: 'RUN' }
+  | { type: 'STOP' }
+  | { type: 'PAUSE' }
   | SequencerConfigEvent
   | ClockEvent;
 
@@ -122,9 +131,16 @@ export const sequencerMachineDefaultOptions: Partial<MachineOptions<
 >> = {
   actions: {
     spawnClock: assign<SequencerContext, SequencerEvent>({
-      clock: () => spawn(clockMachine, { name: "clock", autoForward: true }),
+      clock: () =>
+        spawn(clockMachine, {
+          name: 'clock',
+          autoForward: true,
+        }),
     }),
   },
+  // services: {
+  //   determineNoteEvent: ()
+  // }
 };
 
 const sequencerMachineConfig: MachineConfig<
@@ -132,40 +148,40 @@ const sequencerMachineConfig: MachineConfig<
   SequencerStateSchema,
   SequencerEvent
 > = {
-  entry: "spawnClock",
-  id: "sequencer",
-  initial: "inactive",
+  entry: 'spawnClock',
+  id: 'sequencer',
+  initial: 'inactive',
   states: {
     active: {
-      id: "active",
+      id: 'active',
       states: {
         running: {
-          id: "running",
+          id: 'running',
           on: {
-            PAUSE: "paused",
+            PAUSE: 'paused',
           },
         },
         paused: {
-          id: "paused",
+          id: 'paused',
           on: {
-            RUN: "running",
+            RUN: 'running',
           },
         },
       },
       on: {
-        STOP: "stopped",
+        STOP: 'stopped',
         STEP: [
-          "advanceToNextStep", // TODO: Define
+          'advanceToNextStep', // TODO: Define
         ],
       },
     },
 
     inactive: {
-      entry: "resetCurrentStep", // TODO: Define
-      id: "inactive",
+      entry: 'resetCurrentStep', // TODO: Define
+      id: 'inactive',
       on: {
-        RUN: "active.running",
-        PAUSE: "active.paused",
+        RUN: 'active.running',
+        PAUSE: 'active.paused',
       },
     },
   },

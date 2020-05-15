@@ -1,11 +1,16 @@
 import {
   Machine,
   MachineConfig,
-  InvokeCreator,
   sendParent,
-  ActionFunction,
-  forwardTo,
+  spawn,
+  assign,
+  MachineOptions,
+  Actor,
+  InvokeCallback,
 } from 'xstate';
+
+import { makeInternalClock } from './internalClock';
+import { log } from 'xstate/lib/actions';
 
 // CLOCK CONTEXT DEFINITION
 
@@ -14,6 +19,7 @@ export interface ClockContext {
   // tempoSetting will be ignored when running external clock
   swingAmount: number; // 0 to 1 - represents the amount that offbeats should be offset
   // Values should be floored and ceilinged to fit.
+  internalClock?: Actor<ClockContext, ClockEvent>;
 }
 
 const defaultClockContext: ClockContext = {
@@ -38,51 +44,25 @@ export type ClockEvent =
   | { type: 'CHNG_SWING'; data: ClockContext['swingAmount'] }
   | { type: 'PULSE'; data: undefined };
 
-// ACTIONS
-const actions: Record<
-  string,
-  ActionFunction<ClockContext, ClockEvent>
-> = {};
+// MACHINE OPTIONS
 
-// TODO: implement swing
-// TODO: implement correction for interval drift
-const makeInternalClock: InvokeCreator<
+const clockMachineDefaultOptions: Partial<MachineOptions<
   ClockContext,
   ClockEvent
-> = (ctx) => (callback, onReceive) => {
-  let id: ReturnType<typeof setInterval>;
-  let cleanup: Function;
-
-  // Sets an interval that sends the 'PULSE' event to the parent every 64th note
-  const setClock = (bpm: number) => {
-    const correctionAmount = 2.5;
-    // const correctionFactor = 0.8103; // amount to correct for timing errors by
-    const msPerBeat: number =
-      (60 * 1000) / bpm / 64 - correctionAmount; // conversion from bpm to milliseconds interval
-    // e.g. 120 bt per min => 7.8125 ms per 64th note
-
-    clearInterval(id);
-
-    id = setInterval(() => {
-      callback('PULSE');
-    }, msPerBeat);
-
-    cleanup = () => clearInterval(id);
-  };
-
-  // Set the clock initially
-  setClock(ctx.tempoSetting);
-
-  // If the clock is asked to change tempo, set the clock
-  onReceive((evt: ClockEvent) => setClock(evt.data));
-
-  return cleanup;
-};
-
-// TODO: implement external clock
-// SERVICES
-const services = {
-  makeInternalClock,
+>> = {
+  actions: {
+    spawnInternalClock: assign<ClockContext, ClockEvent>({
+      internalClock: (ctx, evt) =>
+        spawn(makeInternalClock(ctx, evt) as InvokeCallback, {
+          name: 'internalClock',
+          autoForward: true,
+        }),
+    }),
+    updateTempo: assign<ClockContext, ClockEvent>({
+      tempoSetting: (_, evt) => evt.data,
+    }),
+    log: log((_, evt) => evt, 'clock machine'),
+  },
 };
 
 // MACHINE DEFINITION
@@ -93,13 +73,17 @@ const clockMachineConfig: MachineConfig<
 > = {
   id: 'clock',
   initial: 'internal',
-  on: { PULSE: { actions: sendParent('PULSE') } },
+  on: {
+    PULSE: { actions: sendParent('PULSE') },
+    CHNG_TEMPO: {
+      actions: ['updateTempo'],
+    },
+  },
   states: {
     internal: {
-      invoke: { id: 'internalClock', src: 'makeInternalClock' },
+      entry: ['spawnInternalClock', 'log'],
       on: {
         CHNG_SRC_EXT: 'external',
-        CHNG_TEMPO: { actions: forwardTo('internalClock') },
       },
     },
 
@@ -112,7 +96,7 @@ const clockMachineConfig: MachineConfig<
 /** A machine that sends a "PULSE" event to the parent every 64th note */
 const clockMachine = Machine(
   clockMachineConfig,
-  { actions, services },
+  clockMachineDefaultOptions,
   defaultClockContext
 );
 
