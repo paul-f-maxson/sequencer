@@ -1,5 +1,3 @@
-// TODO: implement swing
-
 import { ClockContext, ClockEvent } from '.';
 import { InvokeCreator } from 'xstate';
 
