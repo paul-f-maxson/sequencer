@@ -108,7 +108,7 @@ it('sends PULSE event(s)', (done) => {
   }, 1000);
 });
 
-xit(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
+it(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
   expect.assertions(2);
 
   lastPulseTime = undefined;
@@ -125,4 +125,30 @@ xit(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
     expect(avgPulseDuration).toBeLessThan(7.96);
     done();
   }, 1000);
+}, 6000);
+
+xit(`responds to CHNG_TEMPO events`, (done) => {
+  expect.assertions(2);
+
+  service.onEvent((evt) => {
+    if (evt.type === 'CHNG_TEMPO') {
+      setTimeout(() => {
+        const avgPulseDuration =
+          Number(pulseTimeAccumulator / BigInt(pulsesRecorded)) *
+          0.000001;
+
+        // Expect the time between pulse events to be within 1.92% of expected
+        expect(avgPulseDuration).toBeGreaterThan(10);
+        expect(avgPulseDuration).toBeLessThan(11);
+
+        done();
+      }, 1000);
+    }
+  });
+
+  lastPulseTime = undefined;
+  pulsesRecorded = 0;
+  pulseTimeAccumulator = BigInt(0);
+
+  service.send({ type: 'CHNG_TEMPO', data: 90 });
 }, 6000);
