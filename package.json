@@ -11,6 +11,6 @@
     "ts-jest": "^25.4.0"
   },
   "scripts": {
-    "test": "jest"
+    "test": "node --inspect-brk node_modules/.bin/jest --runInBand"
   }
 }
