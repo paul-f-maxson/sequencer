@@ -57,13 +57,7 @@ const mockParentMachine = Machine<
         on: {
           PULSE: {
             actions: () => {
-              const currentTime = process.hrtime.bigint();
-              if (lastPulseTime !== undefined) {
-                pulseTimeAccumulator +=
-                  currentTime - lastPulseTime;
-              }
               pulsesRecorded++;
-              lastPulseTime = currentTime;
             },
           },
         },
@@ -73,11 +67,9 @@ const mockParentMachine = Machine<
   mockParentMachineOptions
 );
 
-const service = interpret(mockParentMachine, logger.log);
+const service = interpret(mockParentMachine, logger.info);
 
-let lastPulseTime: ReturnType<typeof process.hrtime.bigint>;
 let pulsesRecorded = 0;
-let pulseTimeAccumulator = BigInt(0);
 
 beforeAll((done) => {
   service.start();
@@ -91,26 +83,20 @@ afterAll((done) => {
 
 // TESTS
 
-xit('starts without crashing', (done) => {
+it('starts without crashing', (done) => {
   done();
 });
 
-xit(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
-  expect.assertions(2);
+it(`Forwards recieved PULSE events to parent`, (done) => {
+  expect.assertions(1);
 
-  lastPulseTime = undefined;
   pulsesRecorded = 0;
-  pulseTimeAccumulator = BigInt(0);
 
   setTimeout(() => {
-    const avgPulseDuration =
-      Number(pulseTimeAccumulator / BigInt(pulsesRecorded)) *
-      0.000001;
-
-    // Expect the time between pulse events to be within 1.92% of expected
-    expect(avgPulseDuration).toBeGreaterThan(7.66);
-    expect(avgPulseDuration).toBeLessThan(7.96);
+    expect(pulsesRecorded).toBe<number>(1);
 
     done();
   }, 1000);
+
+  service.children.get('clock').send({ type: 'PULSE' });
 }, 6000);

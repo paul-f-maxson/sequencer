@@ -77,7 +77,7 @@ const mockParentMachine = Machine(
   mockParentMachineDefaultOptions
 );
 
-const service = interpret(mockParentMachine, logger.log);
+const service = interpret(mockParentMachine, logger.info);
 
 let lastPulseTime: ReturnType<typeof process.hrtime.bigint>;
 let pulsesRecorded = 0;
@@ -108,7 +108,7 @@ it('sends PULSE event(s)', (done) => {
   }, 1000);
 });
 
-it(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
+it(`Sends a PULSE event every 8+/1ms by default`, (done) => {
   expect.assertions(2);
 
   lastPulseTime = undefined;
@@ -121,13 +121,13 @@ it(`Sends a PULSE event every 7.81+/-0.15ms (1.92%) by default`, (done) => {
       0.000001;
 
     // Expect the time between pulse events to be within 1.92% of expected
-    expect(avgPulseDuration).toBeGreaterThan(7.66);
-    expect(avgPulseDuration).toBeLessThan(7.96);
+    expect(avgPulseDuration).toBeGreaterThan(7);
+    expect(avgPulseDuration).toBeLessThan(9);
     done();
   }, 1000);
 }, 6000);
 
-xit(`responds to CHNG_TEMPO events`, (done) => {
+it(`responds to CHNG_TEMPO events`, (done) => {
   expect.assertions(2);
 
   service.onEvent((evt) => {

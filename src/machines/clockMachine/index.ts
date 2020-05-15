@@ -10,7 +10,7 @@ import {
 } from 'xstate';
 
 import { makeInternalClock } from './internalClock';
-import { log } from 'xstate/lib/actions';
+import { log, send } from 'xstate/lib/actions';
 
 // CLOCK CONTEXT DEFINITION
 
@@ -74,13 +74,14 @@ const clockMachineConfig: MachineConfig<
   id: 'clock',
   initial: 'internal',
   on: {
-    PULSE: { actions: sendParent('PULSE') },
+    PULSE: { actions: [sendParent('PULSE'), 'log'] },
     CHNG_TEMPO: {
-      actions: ['updateTempo'],
+      actions: ['updateTempo', 'forwardToInternalClock'],
     },
   },
   states: {
     internal: {
+      id: 'internal',
       entry: ['spawnInternalClock', 'log'],
       on: {
         CHNG_SRC_EXT: 'external',
@@ -88,6 +89,7 @@ const clockMachineConfig: MachineConfig<
     },
 
     external: {
+      id: 'external',
       on: { CHNG_SRC_INT: 'internal' },
     },
   },
