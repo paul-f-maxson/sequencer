@@ -4,6 +4,7 @@
     "@types/uuid": "^8.0.0",
     "@types/winston": "^2.4.4",
     "accurate-interval": "^1.0.9",
+    "midi": "^1.0.0",
     "typescript": "^3.8.3",
     "uuid": "^8.0.0",
     "winston": "^3.2.1",
