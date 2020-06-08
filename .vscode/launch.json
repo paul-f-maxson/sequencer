@@ -9,8 +9,7 @@
         "--inspect-brk",
         "${workspaceRoot}/node_modules/.bin/jest",
         "${file}",
-        "--runInBand",
-        "--detectOpenHandles"
+        "--runInBand"
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
@@ -24,8 +23,7 @@
         "--inspect-brk",
         "${workspaceRoot}/node_modules/.bin/jest",
         "${fileDirname}",
-        "--runInBand",
-        "--detectOpenHandles"
+        "--runInBand"
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
@@ -38,8 +36,7 @@
       "runtimeArgs": [
         "--inspect-brk",
         "${workspaceRoot}/node_modules/.bin/jest",
-        "--runInBand",
-        "--detectOpenHandles"
+        "--runInBand"
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",

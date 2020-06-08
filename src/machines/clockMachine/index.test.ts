@@ -5,56 +5,80 @@ import {
   MachineOptions,
   Interpreter,
   interpret,
-  InvokeCreator,
   InvokeCallback,
 } from 'xstate';
 
 import logger from '../../../logger';
+
+import { MachineEvent as SequencerMachineEvent } from '../masterMachine';
+
 import clockMachine, {
-  ClockContext,
-  ClockEvent,
-  clockMachineDefaultOptions,
+  MachineContext as ClockMachineContext,
+  MachineEvent as ClockMachineEvent,
 } from '.';
+import { log } from 'xstate/lib/actions';
 
 // TEST SETUP
 
-const internalClockRecieveSpy = jest.fn();
+const recieveSpy = jest.fn();
 
-const makeMockInternalClock: InvokeCreator<ClockContext> = () => (
-  _,
-  onReceive
-) => {
-  onReceive(internalClockRecieveSpy);
+const mockExternalClock: InvokeCallback = (localSendParent) => {
+  localSendParent('MIDI_INPUT_READY');
+
+  setTimeout(() => {
+    localSendParent([
+      // Clean input
+      'START', // Should trigger a reset
+      'PULSE', // Should trigger a pulse
+      'STOP', // Should have no external result
+
+      'CONTINUE', // Should have no external result
+      'PULSE', // Should trigger a pulse
+      'STOP', // Should have no external result
+
+      // Dirty input
+      'STOP', // Should have no external result
+      'PULSE', // Should have no external result, ie not trigger a pulse
+
+      'CONTINUE', // Should have no external result
+      'START', // Should have no external result
+    ]);
+  }, 100);
 };
 
 interface MockParentMachineContext {
-  clock: Interpreter<ClockContext, any, ClockEvent, any>;
+  clock: Interpreter<
+    ClockMachineContext,
+    any,
+    ClockMachineEvent,
+    any
+  >;
 }
 
-type MockParentMachineEvent = ClockEvent;
+type MockParentMachineEvent = SequencerMachineEvent;
 
 interface MockParentMachineStateSchema {
   states: { ready: {} };
 }
 
-const mockClockMachine: typeof clockMachine = clockMachine.withConfig(
-  {
-    ...clockMachineDefaultOptions,
-    actions: {
-      ...clockMachineDefaultOptions.actions,
-      spawnInternalClock: assign<ClockContext, ClockEvent>({
-        internalClock: (ctx, evt) =>
-          spawn(
-            makeMockInternalClock(ctx, evt) as InvokeCallback,
-            {
-              name: 'internalClock',
-              autoForward: true,
-            }
-          ),
-      }),
-    },
-  }
-);
+const mockConfig: Partial<MachineOptions<
+  ClockMachineContext,
+  ClockMachineEvent
+>> = {
+  actions: {
+    spawnExternalClock: assign<
+      ClockMachineContext,
+      ClockMachineEvent
+    >({
+      midiInputAdaptorRef: () =>
+        spawn(
+          mockExternalClock,
+
+          'mock-external-clock'
+        ),
+    }),
+  },
+};
 
 const mockParentMachineOptions: Partial<MachineOptions<
   MockParentMachineContext,
@@ -66,15 +90,19 @@ const mockParentMachineOptions: Partial<MachineOptions<
       MockParentMachineEvent
     >({
       clock: () =>
-        spawn(mockClockMachine, {
-          name: 'clock',
-          autoForward: true,
-        }),
+        spawn(
+          clockMachine.withConfig(
+            mockConfig
+          ) as typeof clockMachine,
+          {
+            name: 'clock',
+          }
+        ),
     }),
+
+    logEvent: log((_, evt) => evt, 'mock clock parent'),
   },
 };
-
-let pulsesRecorded: number;
 
 const mockParentMachine = Machine<
   MockParentMachineContext,
@@ -83,18 +111,44 @@ const mockParentMachine = Machine<
 >(
   {
     id: 'mockParent',
+    initial: 'ready',
+
+    // CONTEXT
     context: {
       clock: undefined,
     },
-    entry: ['spawnClock'],
-    initial: 'ready',
+
     states: {
       ready: {
+        // EVENTS
+        entry: ['spawnClock'],
+
         on: {
           PULSE: {
-            actions: () => {
-              pulsesRecorded++;
-            },
+            actions: [
+              'logEvent',
+              () => {
+                recieveSpy('PULSE');
+              },
+            ],
+          },
+
+          RESET: {
+            actions: [
+              'logEvent',
+              () => {
+                recieveSpy('RESET');
+              },
+            ],
+          },
+
+          READY: {
+            actions: [
+              'logEvent',
+              () => {
+                recieveSpy('READY');
+              },
+            ],
           },
         },
       },
@@ -103,51 +157,63 @@ const mockParentMachine = Machine<
   mockParentMachineOptions
 );
 
-const service = interpret(mockParentMachine, logger.info);
-
-beforeAll((done) => {
-  service.start();
-  done();
-});
-
-afterAll((done) => {
-  service.stop();
-  done();
-});
-
 // TESTS
-
 xit('starts without crashing', (done) => {
+  interpret(
+    Machine({
+      id: 'mockParent',
+      initial: 'ready',
+
+      context: { clock: undefined },
+
+      states: {
+        ready: {
+          entry: assign({
+            clock: () =>
+              spawn(clockMachine, {
+                name: 'clock',
+
+                autoForward: true,
+              }),
+          }),
+        },
+      },
+    }),
+    {
+      logger: (message: string, ...meta: [any]) =>
+        logger.log('info', message, ...meta),
+    }
+  )
+    .start()
+    .stop();
   done();
 });
 
-xit(`Forwards recieved PULSE events to parent`, (done) => {
-  expect.assertions(1);
+it(`Follows defined behavior`, (done) => {
+  const service = interpret(mockParentMachine, {
+    logger: (message: string, ...meta: [any]) =>
+      logger.log('info', message, ...meta),
+  }).start();
 
-  pulsesRecorded = 0;
+  const cleanup = (error?: Error) => {
+    service.stop();
 
-  setTimeout(() => {
-    expect(pulsesRecorded).toBe<number>(1);
+    done(error);
+  };
 
-    done();
-  }, 1000);
-
-  service.children.get('clock').send({ type: 'PULSE' });
-}, 6000);
-
-xit(`Forwards recieved 'CHNG_TEMPO' events to internal clock`, (done) => {
   expect.assertions(1);
 
   setTimeout(() => {
-    expect(internalClockRecieveSpy).toHaveBeenLastCalledWith({
-      type: 'CHNG_TEMPO',
-      data: 90,
-    });
-
-    done();
-  }, 1000);
-
-  service.children
-    .get('clock')
-    .send({ type: 'CHNG_TEMPO', data: 90 });
+    try {
+      expect(recieveSpy.mock.calls).toEqual([
+        ['READY'],
+        ['RESET'],
+        ['PULSE'],
+        ['PULSE'],
+      ]);
+    } catch (e) {
+      cleanup(e);
+    }
+    cleanup();
+  }, 200);
 });

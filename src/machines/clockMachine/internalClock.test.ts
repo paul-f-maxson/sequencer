@@ -1,11 +1,9 @@
-import { ClockEvent, clockMachineDefaultContext } from '.';
+import { MachineEvent, machineDefaultContext } from '.';
 
 import { makeInternalClock } from './internalClock';
 
 import {
   assign,
-  spawn,
-  InvokeCallback,
   MachineOptions,
   Machine,
   MachineConfig,
@@ -20,16 +18,16 @@ const mockParentMachineDefaultOptions: Partial<MachineOptions<
   MockParentMachineEvent
 >> = {
   actions: {
-    spawnInternalClock: assign<
+    /* spawnInternalClock: assign<
       MockParentMachineContext,
       MockParentMachineEvent
     >({
       internalClock: (ctx, evt) =>
-        spawn(makeInternalClock(ctx, evt) as InvokeCallback, {
+        spawn(makeInternalClock(ctx, evt), {
           name: 'internalClock',
           autoForward: true,
         }),
-    }),
+    }), */
 
     trackPulse: assign((ctx) => {
       const { testCtx } = ctx;
@@ -53,7 +51,7 @@ const mockParentMachineDefaultOptions: Partial<MachineOptions<
 
 // MACHINE TYPES
 
-type MockParentMachineEvent = ClockEvent;
+type MockParentMachineEvent = MachineEvent;
 
 interface MockParentMachineStateSchema {
   states: {
@@ -66,7 +64,7 @@ type MockParentMachineContext = typeof mockParentMachineDefaultContext;
 // MACHINE CONTEXT
 
 const mockParentMachineDefaultContext = {
-  ...clockMachineDefaultContext,
+  ...machineDefaultContext,
   testCtx: {
     lastPulseTime: BigInt(0),
     pulseTimeAccumulator: BigInt(0),
@@ -187,7 +185,7 @@ xit(`reacts to CHNG_TEMPO events`, (done) => {
 
   expect.assertions(2);
 
-  service.onEvent((evt: ClockEvent) => {
+  service.onEvent((evt: MachineEvent) => {
     if (evt.type === 'CHNG_TEMPO') {
       setTimeout(() => {
         const avgPulseNs =
@@ -206,5 +204,5 @@ xit(`reacts to CHNG_TEMPO events`, (done) => {
   service.send({
     type: 'CHNG_TEMPO',
     data: 90,
-  } as ClockEvent);
+  } as MachineEvent);
 }, 6000);

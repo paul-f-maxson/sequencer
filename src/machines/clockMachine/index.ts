@@ -1,3 +1,5 @@
+const midi = require('midi');
+
 import {
   Machine,
   MachineConfig,
@@ -10,96 +12,218 @@ import {
 } from 'xstate';
 
 import { makeInternalClock } from './internalClock';
-import { log, send } from 'xstate/lib/actions';
+import { log } from 'xstate/lib/actions';
+import makeMidiInputAdaptor from '../midiInputAdaptorCallback';
+
+// UTILS
+const makeMidiInput = (name: string) => {
+  const input = new midi.Input();
+  input.ignoreTypes(true, false, true);
+  input.openVirtualPort(name);
+  return input;
+};
+
+const midiMessages = {
+  start: [250],
+  stop: [252],
+  continue: [251],
+  pulse: [248],
+};
 
 // CLOCK CONTEXT DEFINITION
 
-export const clockMachineDefaultContext = {
+export const machineDefaultContext = {
   tempoSetting: 120, // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
   // tempoSetting will be ignored when running external clock
+
   swingAmount: 0.5, // 0 to 1 - represents the amount that offbeats should be offset
   // Values should be floored and ceilinged to fit.
-  internalClock: undefined as Actor<
+
+  internalClockRef: undefined as Actor<
     { tempoSetting: number; swingAmount: number },
-    ClockEvent | undefined
+    MachineEvent | undefined
   >,
+
+  midiInputAdaptorRef: undefined as Actor,
+
+  midiInput: makeMidiInput('squ-clock-in'),
 };
 
-export type ClockContext = typeof clockMachineDefaultContext;
+export type MachineContext = typeof machineDefaultContext;
 
 // STATE SCHEMA DEFINITION
 
-interface ClockStateSchema {
+interface MachineStateSchema {
   states: {
-    internal: {};
-    external: {};
+    idle: {};
+    running: {};
+    stopped: {};
+    error: {};
   };
 }
 
 // EVENT DEFINITIONS
-export type ClockEvent =
-  | { type: 'CHNG_SRC_EXT'; data: undefined }
-  | { type: 'CHNG_SRC_INT'; data: undefined }
-  | { type: 'CHNG_TEMPO'; data: ClockContext['tempoSetting'] }
-  | { type: 'CHNG_SWING'; data: ClockContext['swingAmount'] }
-  | { type: 'PULSE'; data: undefined };
+type MidiClockEvent =
+  | { type: 'PULSE' }
+  | { type: 'STOP' }
+  | { type: 'START' }
+  | { type: 'CONTINUE' }
+  | { type: 'MIDI_INPUT_READY' }
+  | { type: 'MIDI_INPUT_ERROR'; data: Error };
+
+export type MachineEvent =
+  | { type: 'CHNG_SRC_EXT' }
+  | { type: 'CHNG_SRC_INT' }
+  | { type: 'CHNG_TEMPO'; data: MachineContext['tempoSetting'] }
+  | { type: 'CHNG_SWING'; data: MachineContext['swingAmount'] }
+  | { type: 'PULSE' }
+  | { type: 'READY' }
+  | MidiClockEvent;
 
 // MACHINE OPTIONS
 
-export const clockMachineDefaultOptions: Partial<MachineOptions<
-  ClockContext,
-  ClockEvent
+export const machineDefaultOptions: Partial<MachineOptions<
+  MachineContext,
+  MachineEvent
 >> = {
   actions: {
-    spawnInternalClock: assign<ClockContext, ClockEvent>({
-      internalClock: (ctx, evt) =>
+    // BUG: current implementation is crap. DO NOT USE
+    spawnInternalClock: assign<MachineContext, MachineEvent>({
+      internalClockRef: (ctx, evt) =>
         spawn(makeInternalClock(ctx, evt) as InvokeCallback, {
           name: 'internalClock',
-          autoForward: true,
         }),
     }),
-    updateTempo: assign<ClockContext, ClockEvent>({
-      tempoSetting: (_, evt) => evt.data,
+
+    spawnExternalClock: assign<MachineContext, MachineEvent>({
+      midiInputAdaptorRef: (ctx) =>
+        spawn(
+          makeMidiInputAdaptor<MachineEvent>(
+            ctx.midiInput,
+            new Map([
+              [
+                midiMessages.start[0],
+                () => ({ type: 'START' } as MachineEvent),
+              ],
+              [
+                midiMessages.stop[0],
+                () => ({ type: 'STOP' } as MachineEvent),
+              ],
+              [
+                midiMessages.continue[0],
+                () => ({ type: 'CONTINUE' } as MachineEvent),
+              ],
+              [
+                midiMessages.pulse[0],
+                () => ({ type: 'PULSE' } as MachineEvent),
+              ],
+            ]),
+            (e) => ({ type: 'MIDI_INPUT_ERROR', data: e }),
+            { type: 'MIDI_INPUT_READY' }
+          ),
+
+          'midi-ext-clock-in'
+        ),
     }),
-    log: log((_, evt) => evt, 'clock machine'),
+
+    updateTempo: assign<MachineContext, MachineEvent>({
+      // for a to-be-implemented internal clock
+      tempoSetting: (
+        _,
+        evt: Extract<MachineEvent, { type: 'CHNG_TEMPO' }>
+      ) => evt.data,
+    }),
+
+    sendParentPulse: sendParent('PULSE'),
+
+    sendParentReset: sendParent('RESET'),
+
+    sendParentReady: sendParent('READY'),
+
+    sendParentError: sendParent(
+      (_: MachineContext, evt: MachineEvent) => ({
+        ...evt,
+        type: 'CLOCK_ERROR',
+      })
+    ),
+
+    logEvent: log((_, evt) => evt, 'clock controller'),
   },
 };
 
 // MACHINE DEFINITION
-const clockMachineConfig: MachineConfig<
-  ClockContext,
-  ClockStateSchema,
-  ClockEvent
+const machineConfig: MachineConfig<
+  MachineContext,
+  MachineStateSchema,
+  MachineEvent
 > = {
   id: 'clock',
-  initial: 'internal',
-  on: {
-    PULSE: { actions: [sendParent('PULSE'), 'log'] },
-    CHNG_TEMPO: {
-      actions: ['updateTempo', 'forwardToInternalClock'],
-    },
-  },
+  initial: 'idle',
+  entry: ['spawnExternalClock'],
+
+  // STATES
   states: {
-    internal: {
-      id: 'internal',
-      entry: ['spawnInternalClock', 'log'],
+    idle: {
+      // EVENTS
       on: {
-        CHNG_SRC_EXT: 'external',
+        MIDI_INPUT_ERROR: {
+          actions: ['logEvent', 'sendParentError'],
+          target: 'error',
+        },
+
+        MIDI_INPUT_READY: {
+          actions: ['logEvent', 'sendParentReady'],
+          target: 'stopped',
+        },
       },
     },
 
-    external: {
-      id: 'external',
-      on: { CHNG_SRC_INT: 'internal' },
+    error: {
+      type: 'final',
+    },
+
+    running: {
+      id: 'running',
+
+      // EVENTS
+      on: {
+        PULSE: { actions: ['logEvent', 'sendParentPulse'] },
+        STOP: { actions: ['logEvent'], target: 'stopped' },
+      },
+    },
+
+    stopped: {
+      id: 'stopped',
+
+      // EVENTS
+      on: {
+        START: {
+          actions: ['logEvent', 'sendParentReset'],
+          target: 'running',
+        },
+
+        CONTINUE: {
+          actions: ['logEvent'],
+          target: 'running',
+        },
+      },
     },
   },
 };
 
-/** A machine that sends a "PULSE" event to the parent every 64th note */
-const clockMachine = Machine(
-  clockMachineConfig,
-  clockMachineDefaultOptions,
-  clockMachineDefaultContext
+/** A machine that sends and responds to messages according to the midi realtime spec.
+ * @description In running state, pulse messages are forwarded to the parent.
+ * Stop messages send it to the stopped state.
+ *
+ * In stopped state, recieved pulse messages will NOT be forwarded to the parent.
+ * Continue messages send it back to running.
+ * Start messages do the same, but also send a reset message to the parent.
+ * As per midi spec, clock rate is 96ppqn
+ */
+const machine = Machine(
+  machineConfig,
+  machineDefaultOptions,
+  machineDefaultContext
 );
 
-export default clockMachine;
+export default machine;

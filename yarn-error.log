@@ -1,5 +1,5 @@
 Arguments: 
-  /usr/local/Cellar/node/13.12.0/bin/node /usr/local/Cellar/yarn/1.22.4/libexec/bin/yarn.js add @types/xstate
+  /usr/local/Cellar/node/13.12.0/bin/node /usr/local/Cellar/yarn/1.22.4/libexec/bin/yarn.js info
 
 PATH: 
   /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -14,23 +14,23 @@ Platform:
   darwin x64
 
 Trace: 
-  Error: https://registry.yarnpkg.com/@types%2fxstate: Not found
-      at Request.params.callback [as _callback] (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:66987:18)
-      at Request.self.callback (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:140748:22)
-      at Request.emit (events.js:315:20)
-      at Request.<anonymous> (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:141720:10)
-      at Request.emit (events.js:315:20)
-      at IncomingMessage.<anonymous> (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:141642:12)
-      at Object.onceWrapper (events.js:421:28)
-      at IncomingMessage.emit (events.js:327:22)
-      at endReadableNT (_stream_readable.js:1201:12)
-      at processTicksAndRejections (internal/process/task_queues.js:84:21)
+  TypeError: Cannot read property '1' of null
+      at parsePackageName (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:101135:29)
+      at Object.<anonymous> (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:88790:90)
+      at Generator.next (<anonymous>)
+      at step (/usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:310:30)
+      at /usr/local/Cellar/yarn/1.22.4/libexec/lib/cli.js:321:13
 
 npm manifest: 
   {
     "dependencies": {
+      "@types/accurate-interval": "^1.0.0",
+      "@types/uuid": "^8.0.0",
       "@types/winston": "^2.4.4",
+      "accurate-interval": "^1.0.9",
+      "midi": "^1.0.0",
       "typescript": "^3.8.3",
+      "uuid": "^8.0.0",
       "winston": "^3.2.1",
       "xstate": "^4.9.1"
     },
@@ -40,7 +40,7 @@ npm manifest:
       "ts-jest": "^25.4.0"
     },
     "scripts": {
-      "test": "jest"
+      "test": "node --inspect-brk node_modules/.bin/jest --runInBand"
     }
   }
 
@@ -505,6 +505,11 @@ Lockfile:
     dependencies:
       type-detect "4.0.8"
   
+  "@types/accurate-interval@^1.0.0":
+    version "1.0.0"
+    resolved "https://registry.yarnpkg.com/@types/accurate-interval/-/accurate-interval-1.0.0.tgz#ff931a5e4ac892b25f6091174ea48817290b9f12"
+    integrity sha512-4CArlLyOmJ42YMzX1Ny5kBWFdxuMSA+7K0zwYC5qSv7lFSPIh8toNIPbcrVqQVApMcIaP7AAWY0a+TpBO3GBxA==
+  
   "@types/babel__core@^7.1.7":
     version "7.1.7"
     resolved "https://registry.yarnpkg.com/@types/babel__core/-/babel__core-7.1.7.tgz#1dacad8840364a57c98d0dd4855c6dd3752c6b89"
@@ -598,6 +603,11 @@ Lockfile:
     resolved "https://registry.yarnpkg.com/@types/stack-utils/-/stack-utils-1.0.1.tgz#0a851d3bd96498fa25c33ab7278ed3bd65f06c3e"
     integrity sha512-l42BggppR6zLmpfU6fq9HEa2oGPEI8yrSPL3GITjfRInppYFahObbIQOQK3UGxEnyQpltZLaPe75046NOZQikw==
   
+  "@types/uuid@^8.0.0":
+    version "8.0.0"
+    resolved "https://registry.yarnpkg.com/@types/uuid/-/uuid-8.0.0.tgz#165aae4819ad2174a17476dbe66feebd549556c0"
+    integrity sha512-xSQfNcvOiE5f9dyd4Kzxbof1aTrLobL278pGLKOZI6esGfZ7ts9Ka16CzIN6Y8hFHE1C7jIBZokULhK1bOgjRw==
+  
   "@types/winston@^2.4.4":
     version "2.4.4"
     resolved "https://registry.yarnpkg.com/@types/winston/-/winston-2.4.4.tgz#48cc744b7b42fad74b9a2e8490e0112bd9a3d08d"
@@ -621,6 +631,11 @@ Lockfile:
     version "2.0.3"
     resolved "https://registry.yarnpkg.com/abab/-/abab-2.0.3.tgz#623e2075e02eb2d3f2475e49f99c91846467907a"
     integrity sha512-tsFzPpcttalNjFBCFMqsKYQcWxxen1pgJR56by//QwvJc4/OUS3kPOOttx2tSIfjsylB0pYu7f5D3K1RCxUnUg==
+  
+  accurate-interval@^1.0.9:
+    version "1.0.9"
+    resolved "https://registry.yarnpkg.com/accurate-interval/-/accurate-interval-1.0.9.tgz#5752282f88e8050e5e0947e0d024d37f50300c3c"
+    integrity sha1-V1IoL4joBQ5eCUfg0CTTf1AwDDw=
   
   acorn-globals@^4.3.2:
     version "4.3.4"
@@ -866,6 +881,13 @@ Lockfile:
     integrity sha1-pDAdOJtqQ/m2f/PKEaP2Y342Dp4=
     dependencies:
       tweetnacl "^0.14.3"
+  
+  bindings@~1.5.0:
+    version "1.5.0"
+    resolved "https://registry.yarnpkg.com/bindings/-/bindings-1.5.0.tgz#10353c9e945334bc0511a6d90b38fbc7c9c504df"
+    integrity sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==
+    dependencies:
+      file-uri-to-path "1.0.0"
   
   brace-expansion@^1.1.7:
     version "1.1.11"
@@ -1467,6 +1489,11 @@ Lockfile:
     version "2.3.3"
     resolved "https://registry.yarnpkg.com/fecha/-/fecha-2.3.3.tgz#948e74157df1a32fd1b12c3a3c3cdcb6ec9d96cd"
     integrity sha512-lUGBnIamTAwk4znq5BcqsDaxSmZ9nDVJaij6NvRt/Tg4R69gERA+otPKbS86ROw9nxVMw2/mp1fnaiWqbs6Sdg==
+  
+  file-uri-to-path@1.0.0:
+    version "1.0.0"
+    resolved "https://registry.yarnpkg.com/file-uri-to-path/-/file-uri-to-path-1.0.0.tgz#553a7b8446ff6f684359c445f1e37a05dacc33dd"
+    integrity sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==
   
   fill-range@^4.0.0:
     version "4.0.0"
@@ -2540,6 +2567,14 @@ Lockfile:
       snapdragon "^0.8.1"
       to-regex "^3.0.2"
   
+  midi@^1.0.0:
+    version "1.0.0"
+    resolved "https://registry.yarnpkg.com/midi/-/midi-1.0.0.tgz#3949c5b055fb30d84adcc8e0975572f8373873e0"
+    integrity sha512-BL2xedtLEy2ExJujuvQQNs5Gz1aXv7/wpq3KKZ7FmmTvVfR3eC+OgiwtC+4+9IinsXfQnTNSOBrG2PAjMHi0ZQ==
+    dependencies:
+      bindings "~1.5.0"
+      nan "^2.3.3"
+  
   mime-db@1.44.0:
     version "1.44.0"
     resolved "https://registry.yarnpkg.com/mime-db/-/mime-db-1.44.0.tgz#fa11c5eb0aca1334b4233cb4d52f10c5a6272f92"
@@ -2591,6 +2626,11 @@ Lockfile:
     version "2.1.2"
     resolved "https://registry.yarnpkg.com/ms/-/ms-2.1.2.tgz#d09d1f357b443f493382a8eb3ccd183872ae6009"
     integrity sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==
+  
+  nan@^2.3.3:
+    version "2.14.1"
+    resolved "https://registry.yarnpkg.com/nan/-/nan-2.14.1.tgz#d7be34dfa3105b91494c3147089315eff8874b01"
+    integrity sha512-isWHgVjnFjh2x2yuJ/tj3JbwoHu3UC2dX5G/88Cm24yB6YopVgxvBObDY7n5xW6ExmFhJpSEQqFPvq9zaXc8Jw==
   
   nanomatch@^1.2.9:
     version "1.2.13"
@@ -3643,6 +3683,11 @@ Lockfile:
     version "3.4.0"
     resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.4.0.tgz#b23e4358afa8a202fe7a100af1f5f883f02007ee"
     integrity sha512-HjSDRw6gZE5JMggctHBcjVak08+KEVhSIiDzFnT9S9aegmp85S/bReBVTb4QTFaRNptJ9kuYaNhnbNEOkbKb/A==
+  
+  uuid@^8.0.0:
+    version "8.0.0"
+    resolved "https://registry.yarnpkg.com/uuid/-/uuid-8.0.0.tgz#bc6ccf91b5ff0ac07bbcdbf1c7c4e150db4dbb6c"
+    integrity sha512-jOXGuXZAWdsTH7eZLtyXMqUb9EcWMGZNbL9YcGBJl4MH4nrxHmZJhEHvyLFrkxo+28uLb/NYRcStH48fnD0Vzw==
   
   v8-to-istanbul@^4.1.3:
     version "4.1.3"

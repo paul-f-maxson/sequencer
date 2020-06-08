@@ -6,9 +6,11 @@ import {
   MachineOptions,
   assign,
 } from 'xstate';
+import {log} from 'xstate/lib/actions'
+
 import clockMachine, {
-  ClockContext,
-  ClockEvent,
+  MachineContext as ClockMachineContext,
+  MachineEvent as ClockMachineEvent,
 } from '../clockMachine';
 
 // CONTEXT DEFINITIONS
@@ -60,10 +62,15 @@ type SequencerConfig = {
   timeSignature: TimeSignature;
 };
 
-interface SequencerContext {
+interface MachineContext {
   steps: Array<SequencerStep>;
   currentStep: number; // integer representing the current step of the sequence
-  clock?: Interpreter<ClockContext, any, ClockEvent, any>; // An actor that sends STEP events to the machine at regular intervals
+  clock?: Interpreter<
+    ClockMachineContext,
+    any,
+    ClockMachineEvent,
+    any
+  >; 
   config: SequencerConfig;
 }
 
@@ -72,7 +79,7 @@ const defaultSequencerConfig: SequencerConfig = {
   timeSignature: { top: 4, bottom: 'quarter' },
 };
 
-const defaultSequencerContext: SequencerContext = {
+const machineDefaultContext: MachineContext = {
   steps: Array(16).fill({
     noteValue: 64,
     glide: false,
@@ -86,15 +93,11 @@ const defaultSequencerContext: SequencerContext = {
 
 // STATE SCHEMA DEFINITION
 
-interface SequencerStateSchema {
+interface MachineStateSchema {
   states: {
-    active: {
-      states: {
-        running: {};
-        paused: {};
-      };
-    };
-    inactive: {};
+    idle: {};
+    running: {};
+    error: {};
   };
 }
 
@@ -114,83 +117,59 @@ type SequencerConfigEvent =
       data: TimeSignature['bottom'];
     };
 
-type SequencerEvent =
-  | { type: 'MODIFY_STEP' }
-  | { type: 'STEP' }
+export type MachineEvent =
   | { type: 'RUN' }
-  | { type: 'STOP' }
-  | { type: 'PAUSE' }
+  | { type: 'CHILDREN_READY' }
+  | { type: 'MODIFY_STEP' }
+  | { type: 'PULSE' }
+  | { type: 'RESET' }
   | SequencerConfigEvent
-  | ClockEvent;
+  | ClockMachineEvent;
 
 // MACHINE CONFIG DEFINITIONS
 
 export const sequencerMachineDefaultOptions: Partial<MachineOptions<
-  SequencerContext,
-  SequencerEvent
+  MachineContext,
+  MachineEvent
 >> = {
   actions: {
-    spawnClock: assign<SequencerContext, SequencerEvent>({
+    spawnClock: assign<MachineContext, MachineEvent>({
       clock: () =>
         spawn(clockMachine, {
           name: 'clock',
-          autoForward: true,
         }),
     }),
+
+    logEvent: log((_, evt) => evt, 'master controller'),
   },
-  // services: {
-  //   determineNoteEvent: ()
-  // }
 };
 
-const sequencerMachineConfig: MachineConfig<
-  SequencerContext,
-  SequencerStateSchema,
-  SequencerEvent
+const machineConfig: MachineConfig<
+  MachineContext,
+  MachineStateSchema,
+  MachineEvent
 > = {
   entry: 'spawnClock',
   id: 'sequencer',
-  initial: 'inactive',
+  initial: 'idle',
   states: {
-    active: {
-      id: 'active',
-      states: {
-        running: {
-          id: 'running',
-          on: {
-            PAUSE: 'paused',
-          },
-        },
-        paused: {
-          id: 'paused',
-          on: {
-            RUN: 'running',
-          },
-        },
-      },
+    idle: {
+      // TODO: invoke a service that spawns the child actors here, transition to the running state when all are spawned
       on: {
-        STOP: 'stopped',
-        STEP: [
-          'advanceToNextStep', // TODO: Define
-        ],
+        RUN: 'running',
       },
     },
 
-    inactive: {
-      entry: 'resetCurrentStep', // TODO: Define
-      id: 'inactive',
-      on: {
-        RUN: 'active.running',
-        PAUSE: 'active.paused',
-      },
-    },
+    running: {},
+
+    error: {},
   },
 };
 
 const sequencerMachine = Machine(
-  sequencerMachineConfig,
+  machineConfig,
   sequencerMachineDefaultOptions,
-  defaultSequencerContext
+  machineDefaultContext
 );
 
 export default sequencerMachine;

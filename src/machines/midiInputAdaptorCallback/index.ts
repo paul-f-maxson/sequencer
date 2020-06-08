@@ -1,5 +1,7 @@
 import { AnyEventObject, InvokeCallback } from 'xstate';
 
+import logger from '../../../logger'
+
 type MidiMessage = [number, number, number];
 
 type MessageHandler = (
@@ -23,10 +25,14 @@ type MidiMessageMap<TEvent> = Map<
 
 /** HOF that produces a spawnable callback. The callback reports MIDI messages to its parent.
  * @description The callback sends creates and sends events as specified by the midiMessageMap in response to Midi messages. If an error occurs while the midi subscription is being set up, the actor sends the provided event to the parent.
+ *
+ * @param TEvent The event type of the invoking machine.
+ *
  * @param midiInput The midi input object. While this actor was designed to work with node-midi out of the box, any midi library can be used as long as it fits the subscription pattern.
  * @param midiMessageMap A mapping between Midi event codes and function that builds an event for the callback to send to its parent when a given midi message is received.
  * @param makeOnError A function that generates the event for the Actor to send to its parent when the subscription process throws an error.
  * @param onReady The event for the Actor to send to its parent when the subscription is succesfully completed.
+ *
  * @returns An invokable or spawnable callback
  *
  * @example
@@ -43,6 +49,7 @@ type MidiMessageMap<TEvent> = Map<
  *    {type: 'CLOCK_INPUT_READY'}
  *  ), 'midi-clock-input')
  * })
+ *
  */
 const makeMidiInputAdaptor = <TEvent extends AnyEventObject>(
   midiInput: MidiInput,
@@ -51,27 +58,27 @@ const makeMidiInputAdaptor = <TEvent extends AnyEventObject>(
     throw e;
   },
   onReady?: TEvent
-) =>
-  ((sendParent) => {
-    try {
-      midiInput.on(
-        'message',
-        (deltaTime: number, message: MidiMessage) => {
-          const currentMessageHandler = midiMessageMap.get(
-            message[0]
+): InvokeCallback => (localSendParent) => {
+  try {
+    midiInput.on(
+      'message',
+      (deltaTime: number, message: MidiMessage) => {
+        logger.log('info', `midi input ${midiInput.}`, JSON.stringify(message))
+        const currentMessageHandler = midiMessageMap.get(
+          message[0]
+        );
+        if (typeof currentMessageHandler === 'function') {
+          localSendParent(
+            currentMessageHandler(message, deltaTime)
           );
-          if (typeof currentMessageHandler === 'function') {
-            sendParent(
-              currentMessageHandler(message, deltaTime)
-            );
-          }
         }
-      );
-    } catch (error) {
-      sendParent(makeOnError(error));
-    }
+      }
+    );
+  } catch (error) {
+    localSendParent(makeOnError(error));
+  }
 
-    sendParent(onReady);
-  }) as InvokeCallback;
+  localSendParent(onReady);
+};
 
 export default makeMidiInputAdaptor;

@@ -1,8 +1,6 @@
 const midi = require('midi');
 
-import makeMidiInputAdaptor, {
-  MidiInput,
-} from './externalClock';
+import makeMidiInputAdaptor, { MidiInput } from './';
 
 import {
   Machine,

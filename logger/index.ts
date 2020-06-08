@@ -12,30 +12,17 @@ const logger = createLogger({
   ),
   defaultMeta: { service: 'main' },
   transports: [
-    //
-    // - Write to all logs with level `info` and below to `machine.log`.
-    // - Write all logs error (and below) to `machine-error.log`.
-    //
+    // - Write all logs error (and below) to `logs/error.log`.
     new transports.File({
       filename: './logs/error.log',
       level: 'error',
     }),
+
+    // - Write to all logs with level `info` and below to `logs/combined.log`.
     new transports.File({
-      filename: './logs/main.log',
+      filename: './logs/combined.log',
     }),
   ],
 });
-
-//
-// If we're not in production then **ALSO** log to the `console`
-// with the colorized simple format.
-//
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new transports.Console({
-      format: format.combine(format.colorize(), format.simple()),
-    })
-  );
-}
 
 export default logger;

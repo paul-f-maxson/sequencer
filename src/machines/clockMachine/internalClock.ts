@@ -1,5 +1,5 @@
-import { ClockContext, ClockEvent } from '.';
-import { InvokeCreator } from 'xstate';
+import { MachineContext, MachineEvent } from '.';
+import { InvokeCreator, InvokeCallback } from 'xstate';
 import accurateInterval from 'accurate-interval';
 
 type SetIntervalType = (
@@ -18,8 +18,8 @@ const clearInterval = (
 
 // TODO: implement correction for interval drift
 export const makeInternalClock: InvokeCreator<
-  ClockContext,
-  ClockEvent
+  MachineContext,
+  MachineEvent
 > = (ctx) => (callback, onReceive) => {
   let interval: ReturnType<typeof setInterval>;
   let cleanup: Function;
@@ -42,12 +42,11 @@ export const makeInternalClock: InvokeCreator<
 
     cleanup = () => clearInterval(interval);
   };
-
   // Set the clock initially
   setClock(ctx.tempoSetting);
 
   // If the clock is asked to change tempo, set the clock
-  onReceive((evt: ClockEvent) => {
+  onReceive((evt: MachineEvent) => {
     switch (evt.type) {
       case 'CHNG_TEMPO':
         setClock(evt.data);
