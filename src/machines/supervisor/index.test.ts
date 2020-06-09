@@ -1,6 +1,6 @@
 import { Machine, interpret } from 'xstate';
 import sequencerMachine, {
-  sequencerMachineDefaultOptions,
+  machineDefaultOptions,
 } from '.';
 
 let lastNoteTime: ReturnType<typeof process.hrtime.bigint>;
@@ -30,7 +30,7 @@ const mockPlayerMachine = Machine({
 
 const service = interpret(
   sequencerMachine.withConfig({
-    ...sequencerMachineDefaultOptions,
+    ...machineDefaultOptions,
   })
 );
 

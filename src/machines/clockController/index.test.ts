@@ -10,7 +10,7 @@ import {
 
 import logger from '../../../logger';
 
-import { MachineEvent as SequencerMachineEvent } from '../masterMachine';
+import { MachineEvent as SequencerMachineEvent } from '../supervisor';
 
 import clockMachine, {
   MachineContext as ClockMachineContext,

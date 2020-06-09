@@ -1,27 +1,25 @@
-const midi = require('midi');
 
 import {
   Machine,
   MachineConfig,
   sendParent,
+  send,
   spawn,
   assign,
   MachineOptions,
   Actor,
   InvokeCallback,
+  Interpreter,
 } from 'xstate';
-
-import { makeInternalClock } from './internalClock';
 import { log } from 'xstate/lib/actions';
-import makeMidiInputAdaptor from '../midiInputAdaptorCallback';
 
-// UTILS
-const makeMidiInput = (name: string) => {
-  const input = new midi.Input();
-  input.ignoreTypes(true, false, true);
-  input.openVirtualPort(name);
-  return input;
-};
+import makeMidiInputAdaptor from '../midiInputAdaptorCallback';
+import { makeInternalClock } from './internalClock';
+import { 
+  MachineContext as SequenceControllerContext, 
+  MachineStateSchema as SequenceControllerStateSchema, 
+  MachineEvent as SequenceControllerEvent 
+} from  '../sequenceControllerMachine'
 
 const midiMessages = {
   start: [250],
@@ -41,19 +39,25 @@ export const machineDefaultContext = {
 
   internalClockRef: undefined as Actor<
     { tempoSetting: number; swingAmount: number },
-    MachineEvent | undefined
+    MachineEvent
   >,
 
   midiInputAdaptorRef: undefined as Actor,
 
-  midiInput: makeMidiInput('squ-clock-in'),
+  sequenceControllerRef: undefined as Interpreter<
+    SequenceControllerContext, 
+    SequenceControllerStateSchema, 
+    SequenceControllerEvent
+  >,
+
+  midiInput: undefined as any
 };
 
 export type MachineContext = typeof machineDefaultContext;
 
 // STATE SCHEMA DEFINITION
 
-interface MachineStateSchema {
+export interface MachineStateSchema {
   states: {
     idle: {};
     running: {};
@@ -134,9 +138,9 @@ export const machineDefaultOptions: Partial<MachineOptions<
       ) => evt.data,
     }),
 
-    sendParentPulse: sendParent('PULSE'),
+    sendSequencePulse: send('PULSE', { to: ctx => ctx.sequenceControllerRef }),
 
-    sendParentReset: sendParent('RESET'),
+    sendSequenceReset: sendParent('RESET'),
 
     sendParentReady: sendParent('READY'),
 
@@ -172,7 +176,7 @@ const machineConfig: MachineConfig<
         },
 
         MIDI_INPUT_READY: {
-          actions: ['logEvent', 'sendParentReady'],
+          actions: ['logEvent'],
           target: 'stopped',
         },
       },
@@ -187,7 +191,7 @@ const machineConfig: MachineConfig<
 
       // EVENTS
       on: {
-        PULSE: { actions: ['logEvent', 'sendParentPulse'] },
+        PULSE: { actions: ['logEvent', 'sendSequencePulse'] },
         STOP: { actions: ['logEvent'], target: 'stopped' },
       },
     },
@@ -198,7 +202,7 @@ const machineConfig: MachineConfig<
       // EVENTS
       on: {
         START: {
-          actions: ['logEvent', 'sendParentReset'],
+          actions: ['logEvent', 'sendSequencePulse'],
           target: 'running',
         },
 
@@ -223,7 +227,6 @@ const machineConfig: MachineConfig<
 const machine = Machine(
   machineConfig,
   machineDefaultOptions,
-  machineDefaultContext
 );
 
 export default machine;
