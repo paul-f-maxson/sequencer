@@ -10,11 +10,13 @@
     "winston": "^3.2.1",
     "xstate": "^4.10.0"
   },
+
   "devDependencies": {
     "@types/jest": "^25.2.1",
     "jest": "^25.5.4",
     "ts-jest": "^25.4.0"
   },
+  
   "scripts": {
     "test": "node node_modules/.bin/jest --runInBand"
   }

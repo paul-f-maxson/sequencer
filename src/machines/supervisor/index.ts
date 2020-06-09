@@ -59,7 +59,9 @@ export type MachineContext = typeof machineDefaultContext;
 
 // EVENTS
 
-export type MachineEvent = null;
+const clockReady = () => ({type: 'CLOCK_READY'}) as const
+
+export type MachineEvent = ReturnType<typeof clockReady>;
 
 // CONFIG
 

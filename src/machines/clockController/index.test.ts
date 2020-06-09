@@ -10,11 +10,16 @@ import {
 
 import logger from '../../../logger';
 
-import { MachineEvent as SequencerMachineEvent } from '../supervisor';
+import {
+  MachineEvent as SupervisorEvent,
+  MachineContext as SupervisorContext,
+} from '../supervisor';
 
 import clockMachine, {
-  MachineContext as ClockMachineContext,
-  MachineEvent as ClockMachineEvent,
+  MachineContext as ClockControllerContext,
+  MachineEvent as ClockControllerEvent,
+  MachineStateSchema as ClockControllerStateSchema,
+  machineDefaultContext as clockControllerDefaultContext,
 } from '.';
 import { log } from 'xstate/lib/actions';
 
@@ -46,29 +51,22 @@ const mockExternalClock: InvokeCallback = (localSendParent) => {
   }, 100);
 };
 
-interface MockParentMachineContext {
-  clock: Interpreter<
-    ClockMachineContext,
-    any,
-    ClockMachineEvent,
-    any
-  >;
-}
+type MockParentMachineContext = SupervisorContext;
 
-type MockParentMachineEvent = SequencerMachineEvent;
+type MockParentMachineEvent = SupervisorEvent;
 
 interface MockParentMachineStateSchema {
   states: { ready: {} };
 }
 
-const mockConfig: Partial<MachineOptions<
-  ClockMachineContext,
-  ClockMachineEvent
+const mockMachineOptions: Partial<MachineOptions<
+  ClockControllerContext,
+  ClockControllerEvent
 >> = {
   actions: {
     spawnExternalClock: assign<
-      ClockMachineContext,
-      ClockMachineEvent
+      ClockControllerContext,
+      ClockControllerEvent
     >({
       midiInputAdaptorRef: () =>
         spawn(
@@ -89,11 +87,17 @@ const mockParentMachineOptions: Partial<MachineOptions<
       MockParentMachineContext,
       MockParentMachineEvent
     >({
-      clock: () =>
+      clockControllerRef: (ctx) =>
         spawn(
-          clockMachine.withConfig(
-            mockConfig
-          ) as typeof clockMachine,
+          clockMachine
+            .withContext({
+              ...clockControllerDefaultContext,
+
+              sequenceControllerRef: ctx.sequenceControllerRef,
+            })
+            .withConfig(
+              mockMachineOptions
+            ) as typeof clockMachine,
           {
             name: 'clock',
           }
@@ -113,40 +117,20 @@ const mockParentMachine = Machine<
     id: 'mockParent',
     initial: 'ready',
 
-    // CONTEXT
-    context: {
-      clock: undefined,
-    },
-
     states: {
       ready: {
         // EVENTS
-        entry: ['spawnClock'],
+        entry: [
+          'spawnSequenceController',
+          'spawnClockController',
+        ],
 
         on: {
-          PULSE: {
+          CLOCK_READY: {
             actions: [
               'logEvent',
               () => {
-                recieveSpy('PULSE');
-              },
-            ],
-          },
-
-          RESET: {
-            actions: [
-              'logEvent',
-              () => {
-                recieveSpy('RESET');
-              },
-            ],
-          },
-
-          READY: {
-            actions: [
-              'logEvent',
-              () => {
-                recieveSpy('READY');
+                recieveSpy('CLOCK_READY');
               },
             ],
           },
@@ -156,6 +140,37 @@ const mockParentMachine = Machine<
   },
   mockParentMachineOptions
 );
+
+const mockSequenceControllerMachine = Machine({
+  id: 'mockSequenceController',
+  initial: 'ready',
+
+  states: {
+    ready: {
+      // EVENTS
+
+      on: {
+        PULSE: {
+          actions: [
+            'logEvent',
+            () => {
+              recieveSpy('PULSE');
+            },
+          ],
+        },
+
+        RESET: {
+          actions: [
+            'logEvent',
+            () => {
+              recieveSpy('RESET');
+            },
+          ],
+        },
+      },
+    },
+  },
+});
 
 // TESTS
 xit('starts without crashing', (done) => {

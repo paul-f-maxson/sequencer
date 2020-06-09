@@ -1,4 +1,3 @@
-
 import {
   Machine,
   MachineConfig,
@@ -10,16 +9,19 @@ import {
   Actor,
   InvokeCallback,
   Interpreter,
+  AnyEventObject,
 } from 'xstate';
 import { log } from 'xstate/lib/actions';
 
-import makeMidiInputAdaptor from '../midiInputAdaptorCallback';
+import makeMidiInputAdaptor, {
+  MidiInput,
+} from '../midiInputAdaptorCallback';
 import { makeInternalClock } from './internalClock';
-import { 
-  MachineContext as SequenceControllerContext, 
-  MachineStateSchema as SequenceControllerStateSchema, 
-  MachineEvent as SequenceControllerEvent 
-} from  '../sequenceControllerMachine'
+import {
+  MachineContext as SequenceControllerContext,
+  MachineStateSchema as SequenceControllerStateSchema,
+  MachineEvent as SequenceControllerEvent,
+} from '../sequenceControllerMachine';
 
 const midiMessages = {
   start: [250],
@@ -28,7 +30,7 @@ const midiMessages = {
   pulse: [248],
 };
 
-// CLOCK CONTEXT DEFINITION
+// CONTEXT
 
 export const machineDefaultContext = {
   tempoSetting: 120, // positive integer, usually not above 200, that represents the number of quarter notes (beats) the sequencer should play per minute
@@ -39,23 +41,23 @@ export const machineDefaultContext = {
 
   internalClockRef: undefined as Actor<
     { tempoSetting: number; swingAmount: number },
-    MachineEvent
+    AnyEventObject
   >,
 
   midiInputAdaptorRef: undefined as Actor,
 
   sequenceControllerRef: undefined as Interpreter<
-    SequenceControllerContext, 
-    SequenceControllerStateSchema, 
+    SequenceControllerContext,
+    SequenceControllerStateSchema,
     SequenceControllerEvent
   >,
 
-  midiInput: undefined as any
+  midiInput: undefined as MidiInput,
 };
 
 export type MachineContext = typeof machineDefaultContext;
 
-// STATE SCHEMA DEFINITION
+// STATE
 
 export interface MachineStateSchema {
   states: {
@@ -66,25 +68,44 @@ export interface MachineStateSchema {
   };
 }
 
-// EVENT DEFINITIONS
-type MidiClockEvent =
-  | { type: 'PULSE' }
-  | { type: 'STOP' }
-  | { type: 'START' }
-  | { type: 'CONTINUE' }
-  | { type: 'MIDI_INPUT_READY' }
-  | { type: 'MIDI_INPUT_ERROR'; data: Error };
+// EVENTS
+export const midiInputReadyEvent = () =>
+  ({ type: 'MIDI_INPUT_READY' } as const);
+
+export const midiInputErrorEvent = (data: Error) =>
+  ({ type: 'MIDI_INPUT_ERROR', data } as const);
+
+type MidiInputEvent =
+  | ReturnType<typeof midiInputReadyEvent>
+  | ReturnType<typeof midiInputErrorEvent>;
+
+export const pulseEvent = () => ({ type: 'PULSE' } as const);
+
+export const stopEvent = () => ({ type: 'STOP' } as const);
+
+export const startEvent = () => ({ type: 'START' } as const);
+
+export const continueEvent = () =>
+  ({ type: 'CONTINUE' } as const);
+
+type ClockEvent =
+  | ReturnType<typeof pulseEvent>
+  | ReturnType<typeof stopEvent>
+  | ReturnType<typeof startEvent>
+  | ReturnType<typeof continueEvent>;
+
+export const changeTempoEvent = (
+  data: MachineContext['tempoSetting']
+) => ({ type: 'CHNG_TEMPO', data } as const);
+
+type ConfigEvent = ReturnType<typeof changeTempoEvent>;
 
 export type MachineEvent =
-  | { type: 'CHNG_SRC_EXT' }
-  | { type: 'CHNG_SRC_INT' }
-  | { type: 'CHNG_TEMPO'; data: MachineContext['tempoSetting'] }
-  | { type: 'CHNG_SWING'; data: MachineContext['swingAmount'] }
-  | { type: 'PULSE' }
-  | { type: 'READY' }
-  | MidiClockEvent;
+  | ClockEvent
+  | MidiInputEvent
+  | ConfigEvent;
 
-// MACHINE OPTIONS
+// OPTIONS
 
 export const machineDefaultOptions: Partial<MachineOptions<
   MachineContext,
@@ -99,28 +120,19 @@ export const machineDefaultOptions: Partial<MachineOptions<
         }),
     }),
 
-    spawnExternalClock: assign<MachineContext, MachineEvent>({
+    spawnExternalClockAdaptor: assign<
+      MachineContext,
+      MachineEvent
+    >({
       midiInputAdaptorRef: (ctx) =>
         spawn(
           makeMidiInputAdaptor<MachineEvent>(
             ctx.midiInput,
-            new Map([
-              [
-                midiMessages.start[0],
-                () => ({ type: 'START' } as MachineEvent),
-              ],
-              [
-                midiMessages.stop[0],
-                () => ({ type: 'STOP' } as MachineEvent),
-              ],
-              [
-                midiMessages.continue[0],
-                () => ({ type: 'CONTINUE' } as MachineEvent),
-              ],
-              [
-                midiMessages.pulse[0],
-                () => ({ type: 'PULSE' } as MachineEvent),
-              ],
+            new Map<number, () => MachineEvent>([
+              [midiMessages.start[0], startEvent],
+              [midiMessages.stop[0], stopEvent],
+              [midiMessages.continue[0], continueEvent],
+              [midiMessages.pulse[0], pulseEvent],
             ]),
             (e) => ({ type: 'MIDI_INPUT_ERROR', data: e }),
             { type: 'MIDI_INPUT_READY' }
@@ -138,9 +150,13 @@ export const machineDefaultOptions: Partial<MachineOptions<
       ) => evt.data,
     }),
 
-    sendSequencePulse: send('PULSE', { to: ctx => ctx.sequenceControllerRef }),
+    sendSequencePulse: send('PULSE', {
+      to: (ctx) => ctx.sequenceControllerRef,
+    }),
 
-    sendSequenceReset: sendParent('RESET'),
+    sendSequenceReset: send('RESET', {
+      to: (ctx) => ctx.sequenceControllerRef,
+    }),
 
     sendParentReady: sendParent('READY'),
 
@@ -163,7 +179,7 @@ const machineConfig: MachineConfig<
 > = {
   id: 'clock',
   initial: 'idle',
-  entry: ['spawnExternalClock'],
+  entry: ['spawnExternalClockAdaptor'],
 
   // STATES
   states: {
@@ -224,9 +240,6 @@ const machineConfig: MachineConfig<
  * Start messages do the same, but also send a reset message to the parent.
  * As per midi spec, clock rate is 96ppqn
  */
-const machine = Machine(
-  machineConfig,
-  machineDefaultOptions,
-);
+const machine = Machine(machineConfig, machineDefaultOptions);
 
 export default machine;
