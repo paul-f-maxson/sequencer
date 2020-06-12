@@ -3,9 +3,9 @@ import {
   spawn,
   assign,
   MachineOptions,
-  Interpreter,
   interpret,
   InvokeCallback,
+  AnyStateNodeDefinition,
 } from 'xstate';
 
 import logger from '../../../logger';
@@ -13,14 +13,16 @@ import logger from '../../../logger';
 import {
   MachineEvent as SupervisorEvent,
   MachineContext as SupervisorContext,
+  machineDefaultOptions as supervisorDefaultOptions,
 } from '../supervisor';
 
-import clockMachine, {
+import clockController, {
   MachineContext as ClockControllerContext,
   MachineEvent as ClockControllerEvent,
-  MachineStateSchema as ClockControllerStateSchema,
   machineDefaultContext as clockControllerDefaultContext,
 } from '.';
+
+import sequenceControllerMachine from '../sequenceController';
 import { log } from 'xstate/lib/actions';
 
 // TEST SETUP
@@ -51,20 +53,50 @@ const mockExternalClock: InvokeCallback = (localSendParent) => {
   }, 100);
 };
 
-type MockParentMachineContext = SupervisorContext;
+type TestSupervisorContext = SupervisorContext;
 
-type MockParentMachineEvent = SupervisorEvent;
+type TestSupervisorEvent = SupervisorEvent;
 
-interface MockParentMachineStateSchema {
-  states: { ready: {} };
-}
+const supervisorOptions: typeof supervisorDefaultOptions = {
+  actions: {
+    spawnClockController: assign<
+      TestSupervisorContext,
+      TestSupervisorEvent
+    >({
+      clockControllerRef: (ctx) =>
+        spawn(
+          clockController
+            .withContext({
+              ...clockControllerDefaultContext,
 
-const mockMachineOptions: Partial<MachineOptions<
+              sequenceControllerRef: ctx.sequenceControllerRef,
+            })
+            .withConfig(
+              clockControllerMockOptions
+            ) as typeof clockController,
+          {
+            name: 'clock-controller',
+          }
+        ),
+    }),
+
+    spawnSequenceController: assign<
+      TestSupervisorContext,
+      TestSupervisorEvent
+    >({
+      sequenceControllerRef: () => spawn(mockSequenceController),
+    }),
+
+    logEvent: log((_, evt) => evt, 'mock clock parent'),
+  },
+};
+
+const clockControllerMockOptions: Partial<MachineOptions<
   ClockControllerContext,
   ClockControllerEvent
 >> = {
   actions: {
-    spawnExternalClock: assign<
+    spawnExternalClockAdaptor: assign<
       ClockControllerContext,
       ClockControllerEvent
     >({
@@ -78,52 +110,27 @@ const mockMachineOptions: Partial<MachineOptions<
   },
 };
 
-const mockParentMachineOptions: Partial<MachineOptions<
-  MockParentMachineContext,
-  MockParentMachineEvent
->> = {
-  actions: {
-    spawnClock: assign<
-      MockParentMachineContext,
-      MockParentMachineEvent
-    >({
-      clockControllerRef: (ctx) =>
-        spawn(
-          clockMachine
-            .withContext({
-              ...clockControllerDefaultContext,
-
-              sequenceControllerRef: ctx.sequenceControllerRef,
-            })
-            .withConfig(
-              mockMachineOptions
-            ) as typeof clockMachine,
-          {
-            name: 'clock',
-          }
-        ),
-    }),
-
-    logEvent: log((_, evt) => evt, 'mock clock parent'),
-  },
-};
-
-const mockParentMachine = Machine<
-  MockParentMachineContext,
-  MockParentMachineStateSchema,
-  MockParentMachineEvent
+const supervisor = Machine<
+  TestSupervisorContext,
+  AnyStateNodeDefinition,
+  TestSupervisorEvent
 >(
   {
+    //
     id: 'mockParent',
     initial: 'ready',
+
+    // CONTEXT
+    context: {
+      sequenceControllerRef: undefined,
+      clockControllerRef: undefined,
+    },
+
+    entry: ['spawnSequenceController', 'spawnClockController'],
 
     states: {
       ready: {
         // EVENTS
-        entry: [
-          'spawnSequenceController',
-          'spawnClockController',
-        ],
 
         on: {
           CLOCK_READY: {
@@ -138,76 +145,53 @@ const mockParentMachine = Machine<
       },
     },
   },
-  mockParentMachineOptions
+  supervisorOptions
 );
 
-const mockSequenceControllerMachine = Machine({
-  id: 'mockSequenceController',
-  initial: 'ready',
+const mockSequenceController: typeof sequenceControllerMachine = Machine(
+  {
+    // CONFIG
+    id: 'mockSequenceController',
+    initial: 'ready',
 
-  states: {
-    ready: {
-      // EVENTS
+    states: {
+      ready: {
+        // EVENTS
+        on: {
+          PULSE: {
+            actions: [
+              'logEvent',
+              () => {
+                recieveSpy('PULSE');
+              },
+            ],
+          },
 
-      on: {
-        PULSE: {
-          actions: [
-            'logEvent',
-            () => {
-              recieveSpy('PULSE');
-            },
-          ],
-        },
-
-        RESET: {
-          actions: [
-            'logEvent',
-            () => {
-              recieveSpy('RESET');
-            },
-          ],
+          RESET: {
+            actions: [
+              'logEvent',
+              () => {
+                recieveSpy('RESET');
+              },
+            ],
+          },
         },
       },
     },
   },
-});
+  {
+    // OPTIONS
+    actions: {
+      logEvent: log((_, evt) => evt, 'sequence controller'),
+    },
+  }
+);
 
 // TESTS
-xit('starts without crashing', (done) => {
-  interpret(
-    Machine({
-      id: 'mockParent',
-      initial: 'ready',
-
-      context: { clock: undefined },
-
-      states: {
-        ready: {
-          entry: assign({
-            clock: () =>
-              spawn(clockMachine, {
-                name: 'clock',
-
-                autoForward: true,
-              }),
-          }),
-        },
-      },
-    }),
-    {
-      logger: (message: string, ...meta: [any]) =>
-        logger.log('info', message, ...meta),
-    }
-  )
-    .start()
-    .stop();
-  done();
-});
-
-it(`Follows defined behavior`, (done) => {
-  const service = interpret(mockParentMachine, {
+it(`Follows expected behavior`, (done) => {
+  const service = interpret(supervisor, {
     logger: (message: string, ...meta: [any]) =>
-      logger.log('info', message, ...meta),
+      logger.log('debug', message, ...meta),
   }).start();
 
   const cleanup = (error?: Error) => {
@@ -221,7 +205,7 @@ it(`Follows defined behavior`, (done) => {
   setTimeout(() => {
     try {
       expect(recieveSpy.mock.calls).toEqual([
-        ['READY'],
+        ['CLOCK_READY'],
         ['RESET'],
         ['PULSE'],
         ['PULSE'],

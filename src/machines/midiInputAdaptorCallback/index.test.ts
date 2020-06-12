@@ -1,5 +1,7 @@
 const midi = require('midi');
 
+import logger from '../../../logger';
+
 import makeMidiInputAdaptor, { MidiInput } from './';
 
 import {
@@ -114,7 +116,11 @@ it('Adapts midi messages to events', (done) => {
         midiInputAdaptor: undefined,
         midiInput: input,
       }
-    )
+    ),
+    {
+      logger: (message: string, ...meta: [any]) =>
+        logger.log('test', message, ...meta),
+    }
   );
 
   expect.assertions(1);

@@ -1,6 +1,6 @@
 import { AnyEventObject, InvokeCallback } from 'xstate';
 
-import logger from '../../../logger'
+import logger from '../../../logger';
 
 type MidiMessage = [number, number, number];
 
@@ -63,7 +63,11 @@ const makeMidiInputAdaptor = <TEvent extends AnyEventObject>(
     midiInput.on(
       'message',
       (deltaTime: number, message: MidiMessage) => {
-        logger.log('info', `midi input ${midiInput.}`, JSON.stringify(message))
+        logger.log(
+          'info',
+          `midi input`,
+          JSON.stringify(message)
+        );
         const currentMessageHandler = midiMessageMap.get(
           message[0]
         );

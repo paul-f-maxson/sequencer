@@ -9,26 +9,26 @@ import {
   assign,
   Interpreter,
 } from 'xstate';
-import { log } from 'xstate/lib/actions'
+import { log } from 'xstate/lib/actions';
 
-import { 
+import {
   MachineContext as SequenceControllerContext,
   MachineStateSchema as SequenceControllerStateSchema,
   MachineEvent as SequenceControllerEvent,
- } from  '../sequenceControllerMachine'
+} from '../sequenceController';
 
 import clockController, {
   MachineContext as ClockControllerContext,
   MachineStateSchema as ClockControllerStateSchema,
   MachineEvent as ClockControllerEvent,
-  machineDefaultContext as clockControllerDefaultContext
+  machineDefaultContext as clockControllerDefaultContext,
 } from '../clockController';
 
 // UTIL
 
 const midiClockInput = new midi.Input();
-  midiClockInput.ignoreTypes(true, false, true);
-  midiClockInput.openVirtualPort('squ-clock-in');
+midiClockInput.ignoreTypes(true, false, true);
+midiClockInput.openVirtualPort('squ-clock-in');
 
 // STATE
 
@@ -44,22 +44,22 @@ interface MachineStateSchema {
 const machineDefaultContext = {
   sequenceControllerRef: undefined as Interpreter<
     SequenceControllerContext,
-    SequenceControllerStateSchema, 
+    SequenceControllerStateSchema,
     SequenceControllerEvent
   >,
 
   clockControllerRef: undefined as Interpreter<
-    ClockControllerContext, 
-    ClockControllerStateSchema, 
+    ClockControllerContext,
+    ClockControllerStateSchema,
     ClockControllerEvent
-  >
-}
+  >,
+};
 
 export type MachineContext = typeof machineDefaultContext;
 
 // EVENTS
 
-const clockReady = () => ({type: 'CLOCK_READY'}) as const
+const clockReady = () => ({ type: 'CLOCK_READY' } as const);
 
 export type MachineEvent = ReturnType<typeof clockReady>;
 
@@ -70,20 +70,17 @@ export const machineDefaultOptions: Partial<MachineOptions<
   MachineEvent
 >> = {
   actions: {
-    spawnClock: assign<MachineContext, MachineEvent>({
+    spawnClockController: assign<MachineContext, MachineEvent>({
       clockControllerRef: (ctx: MachineContext) =>
-        spawn<
-          ClockControllerContext, 
-          ClockControllerEvent
-        >(
+        spawn<ClockControllerContext, ClockControllerEvent>(
           clockController.withContext({
             ...clockControllerDefaultContext,
 
             midiInput: midiClockInput,
 
-            sequenceControllerRef: ctx.sequenceControllerRef 
+            sequenceControllerRef: ctx.sequenceControllerRef,
           }),
-          
+
           { name: 'clock-controller' }
         ),
     }),
@@ -100,7 +97,7 @@ const machineConfig: MachineConfig<
   id: 'sequencer',
   initial: 'running',
 
-  entry: ['spawnSequenceController', 'spawnClockController', ],
+  entry: ['spawnSequenceController', 'spawnClockController'],
 
   states: {
     running: {},

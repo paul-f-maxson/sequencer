@@ -18,10 +18,12 @@ import makeMidiInputAdaptor, {
 } from '../midiInputAdaptorCallback';
 import { makeInternalClock } from './internalClock';
 import {
+  pulseEvent as sequencePulseEvent,
+  resetEvent as sequenceResetEvent,
   MachineContext as SequenceControllerContext,
   MachineStateSchema as SequenceControllerStateSchema,
   MachineEvent as SequenceControllerEvent,
-} from '../sequenceControllerMachine';
+} from '../sequenceController';
 
 const midiMessages = {
   start: [250],
@@ -71,7 +73,6 @@ export interface MachineStateSchema {
 // EVENTS
 export const midiInputReadyEvent = () =>
   ({ type: 'MIDI_INPUT_READY' } as const);
-
 export const midiInputErrorEvent = (data: Error) =>
   ({ type: 'MIDI_INPUT_ERROR', data } as const);
 
@@ -80,11 +81,8 @@ type MidiInputEvent =
   | ReturnType<typeof midiInputErrorEvent>;
 
 export const pulseEvent = () => ({ type: 'PULSE' } as const);
-
 export const stopEvent = () => ({ type: 'STOP' } as const);
-
 export const startEvent = () => ({ type: 'START' } as const);
-
 export const continueEvent = () =>
   ({ type: 'CONTINUE' } as const);
 
@@ -150,15 +148,18 @@ export const machineDefaultOptions: Partial<MachineOptions<
       ) => evt.data,
     }),
 
-    sendSequencePulse: send('PULSE', {
-      to: (ctx) => ctx.sequenceControllerRef,
+    sendSequencePulse: send<MachineContext, MachineEvent>(
+      sequencePulseEvent(),
+      {
+        to: (ctx) => ctx.sequenceControllerRef as Actor,
+      }
+    ),
+
+    sendSequenceReset: send(sequenceResetEvent(), {
+      to: (ctx) => ctx.sequenceControllerRef as Actor,
     }),
 
-    sendSequenceReset: send('RESET', {
-      to: (ctx) => ctx.sequenceControllerRef,
-    }),
-
-    sendParentReady: sendParent('READY'),
+    sendParentReady: sendParent('CLOCK_READY'),
 
     sendParentError: sendParent(
       (_: MachineContext, evt: MachineEvent) => ({
@@ -192,7 +193,7 @@ const machineConfig: MachineConfig<
         },
 
         MIDI_INPUT_READY: {
-          actions: ['logEvent'],
+          actions: ['logEvent', 'sendParentReady'],
           target: 'stopped',
         },
       },
@@ -218,7 +219,7 @@ const machineConfig: MachineConfig<
       // EVENTS
       on: {
         START: {
-          actions: ['logEvent', 'sendSequencePulse'],
+          actions: ['logEvent', 'sendSequenceReset'],
           target: 'running',
         },
 

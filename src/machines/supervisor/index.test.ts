@@ -1,7 +1,8 @@
 import { Machine, interpret } from 'xstate';
-import sequencerMachine, {
-  machineDefaultOptions,
-} from '.';
+
+import logger from '../../../logger';
+
+import sequencerMachine, { machineDefaultOptions } from '.';
 
 let lastNoteTime: ReturnType<typeof process.hrtime.bigint>;
 let notesRecorded = 0;
@@ -31,7 +32,11 @@ const mockPlayerMachine = Machine({
 const service = interpret(
   sequencerMachine.withConfig({
     ...machineDefaultOptions,
-  })
+  }),
+  {
+    logger: (message: string, ...meta: [any]) =>
+      logger.log('test', message, ...meta),
+  }
 );
 
 beforeAll((done) => {
